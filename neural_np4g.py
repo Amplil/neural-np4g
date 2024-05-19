@@ -23,6 +23,13 @@ class printx(): # ONのときだけ表示
         if cls.out_on:
             print(*args)
 
+def sig(gn): # シグモイド関数
+    x=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+    result = 1 / (1 + np.exp(-x)) # シグモイド関数の演算
+    #for out_node in gn.out_node_list:  # Output to all connected nodes
+    #    gn.out_ele(out_node, result)
+    return result
+
 def split_(gn):
     if (gn.in_deg==1): # 入力ノードは1つ
         result=str(gn.in_ele_list[0]).split() # 入力ノードは1つだけ，リストも文字列にしてしまう
@@ -237,30 +244,41 @@ class DiGraphNode(): # 有向グラフの1つのノードにフォーカス
         self.node=node
         if (node in G.nodes)==False:
             printx.out('Error: ',node,' does not exist in the graph')
-            self.ele=''
-            self.in_deg=0
-            self.out_deg=0
-            self.in_node_list=[]
-            self.out_node_list=[]
-            self.in_ele_list=[] # in edge element list
-            self.out_ele_list=[] # out edge element list
+            return None
         else:
             self.ele=G.nodes[node]['ele']
+            self.val=G.nodes[node]['val']
             self.in_deg=G.in_degree(node)
             self.out_deg=G.out_degree(node)
             self.in_node_list=list(G.pred[node])
             self.out_node_list=list(G[node])
-            self.in_ele_list=[G.edges[n,node]['ele'] for n in self.in_node_list] # in edge element list
-            self.out_ele_list=[G.edges[node,n]['ele'] for n in self.out_node_list] # out edge element list
+            self.in_val_list=[G.edges[n,node]['val'] for n in self.in_node_list] # in edge element list
+            #self.out_ele_list=[G.edges[node,n]['ele'] for n in self.out_node_list] # out edge element list
+            self.in_w_list=[G.edges[n,node]['weight'] for n in self.in_node_list] # in edge weight list
         
     def in_ele(self,in_node,element=None): # in edge element
         if(element!=None):
             self.G.edges[in_node,self.node]['ele']=element
         return self.G.edges[in_node,self.node]['ele']
+    def update_val(self,value): # in edge element
+        self.G.nodes[self.node]['val']=self.val=value
+        return value
+
+    """
     def out_ele(self,out_node,element=None): # out edge element
         if(element!=None):
             self.G.edges[self.node,out_node]['ele']=element
         return self.G.edges[self.node,out_node]['ele']
+    """
+    def out_val(self,out_node,value=None): # out edge element
+        if(value!=None):
+            self.G.edges[self.node,out_node]['val']=value
+        return self.G.edges[self.node,out_node]['val']
+    
+    def node_val_out(self): # ノードの値を出力エッジに反映させる
+        for out_node in self.out_node_list: # 出力ノードは複数でも可
+            self.out_val(out_node,value=self.val)
+    
     def run_check(self):
         if not callable(self.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
             printx.out("This is probably object string node.")
@@ -280,45 +298,61 @@ class DiGraphNode(): # 有向グラフの1つのノードにフォーカス
 
 class NetworkProgram(): # ネットワーク構造データからプログラムを実行
     #def __init__(self,input,node_struct,edge_struct):
-    def __init__(self,input,node_body,edge_struct):
+    def __init__(self,node_struct,edge_struct):
         #self.input="0 1 0"
         self.input=input
         #self.output=""
-        self.output=[] # listにする
-        self.endpoint_node=[] # 出力オブジェクトに接続されるノードのリスト
+        #self.endpoint_node=[] # 出力オブジェクトに接続されるノードのリスト
         self.network=nx.DiGraph()
 
-        node_struct=[('S',input)]
-        node_struct.extend(node_body)
+        #node_struct=[('S',input)]
+        #node_struct.extend(node_body)
         #node_struct.append(('out',out_func))
-        self.network.add_nodes_from([(tup[0],{'ele':tup[1]}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
+        self.network.add_nodes_from([(tup[0],{'ele':tup[1],'val': 0.}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
         self.network.add_edges_from(edge_struct)
-        self.network.add_edges_from(list(map(lambda tup: tup+({'ele': ''},) ,self.network.edges))) # エッジ要素を''で初期化する
+        self.network.add_edges_from(list(map(lambda tup: tup+({'val': 0.},) ,self.network.edges))) # エッジ要素を0.で初期化する
+        self.network.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.network.edges))) # 重みを乱数で初期化する
+
+        self.nodes=[DiGraphNode(self.network,node) for node in self.network.nodes] # gnのlist
+        #self.in_nodes=[DiGraphNode(self.network,gn.node) for gn in self.nodes if gn.ele=='in'] # gnのlist
+        #self.out_nodes=[DiGraphNode(self.network,gn.node) for gn in self.nodes if gn.ele=='out'] # gnのlist
+        """
         for node in self.network.nodes:
             gn=DiGraphNode(self.network,node)
             if not callable(gn.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
                 [gn.out_ele(out_node,gn.ele) for out_node in gn.out_node_list] # 出力エッジ要素をノード要素とする
-
+        """
     def network_show(self):
         print("nodes: ",self.network.nodes.data())
         print("edges: ",self.network.edges.data())
         nx.draw_networkx(self.network)
-        plt.show()        
+        plt.show()
 
-    def run_tick(self,node_list):
-        next_node_list=[]
-        for node in node_list:
-            gn=DiGraphNode(self.network,node) # graph node
+    def run_tick(self,input=[]):
+        #next_node_list=[]
+        #next_state=[]
+         # 先にすべてのノードの値を出力エッジに反映させる
+        for gn in self.nodes:
+            if gn.ele=='in' and input!=[]:
+                gn.update_val(input.pop(0))
+            gn.node_val_out() # ノードの値を出力エッジに反映させる
+
+        for gn in self.nodes:
+            """
             if not callable(gn.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
-                printx.out("Error: This is probably object string node.")
-                return []
+                #printx.out("Error: This is probably object string node.")
+                #return []
+                next_state.append(gn.ele)
             elif (gn.out_deg!=0 and gn.out_ele_list[0]!="") or (node in self.endpoint_node):
                 # 出力エッジの最初の要素の中身で既に実行されているかまたはエンドポイントノードに登録されているかで判断する
                 result="Already calculated: skip"
             elif ("" in gn.in_ele_list): # 入力エッジの要素に""があるかどうかで、まだ入力が実行されていないノードがあるかどうかを判断する
                 result="Not yet: skip"
-            else:
+            """
+            if callable(gn.ele):
                 result=gn.ele(gn)
+                gn.val=result
+                """
                 if gn.out_deg==0:
                     printx.out("This is endpoint node")
                     #result=gn.ele(gn)
@@ -326,28 +360,24 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                     self.endpoint_node.append(node) # エンドポイントノードとして追加
                 if type(result)==int and result<0: return result # マイナスの数値の場合エラーのためネクストノードを追加しない
                 next_node_list.extend(gn.out_node_list)
+                """
+                printx.out("node:",gn.node,", result:",result)
+        #return next_state
 
-            printx.out("node:",node,", result:",result)
-
-        printx.out("next_node_list:",next_node_list)
-        return next_node_list
-
-    def run(self):
+    def run(self,inputs):
+        #self.out_nodes=out_nodes
         #self.network_show()
+        """
         if not 'S' in list(self.network.nodes):
             printx.out("'S' node doesn't exist")
             return ''
         printx.out("node: in =",self.network.nodes['S']['ele'])
         next_node_list=list(self.network['S'])
         printx.out("next_node_list:",next_node_list)
-        while next_node_list!=[]:
-            next_node_list=self.run_tick(next_node_list)
-            if type(next_node_list)==int: return next_node_list
-        if(self.output==[]):
-            return ""
-        else:
-            return self.output[-1] # outputのリストの最後を出力
-
+        """
+        for i in range(10):
+            self.run_tick(inputs[i] if len(inputs)>i else []) # inputが存在するまで
+            printx.out("out: ",[gn.val for gn in self.nodes if gn.ele=="out"])
 
 
 def adfs(gn,node_body,edge_struct): # 自動定義関数
