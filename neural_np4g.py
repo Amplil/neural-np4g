@@ -30,6 +30,15 @@ def sig(gn): # シグモイド関数
     #    gn.out_ele(out_node, result)
     return result
 
+def tanh(gn): # tanh関数
+    x=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+    result = np.tanh(x)
+    return result
+
+def out_(gn): # 出力関数
+    result=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+    return result
+
 def split_(gn):
     if (gn.in_deg==1): # 入力ノードは1つ
         result=str(gn.in_ele_list[0]).split() # 入力ノードは1つだけ，リストも文字列にしてしまう
@@ -332,10 +341,17 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         #next_node_list=[]
         #next_state=[]
          # 先にすべてのノードの値を出力エッジに反映させる
+        input_tmp=input
         for gn in self.nodes:
-            if gn.ele=='in' and input!=[]:
-                gn.update_val(input.pop(0))
+            if gn.ele=='in':
+                if input_tmp!=[]:
+                    gn.update_val(input_tmp.pop(0))
+                else:
+                    gn.update_val(0)
             gn.node_val_out() # ノードの値を出力エッジに反映させる
+            #printx.out("node:",gn.node,", value:",gn.val)
+
+        self.nodes=[DiGraphNode(self.network,node) for node in self.network.nodes] # gnの更新作業
 
         for gn in self.nodes:
             """
@@ -351,7 +367,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
             """
             if callable(gn.ele):
                 result=gn.ele(gn)
-                gn.val=result
+                gn.update_val(result)
                 """
                 if gn.out_deg==0:
                     printx.out("This is endpoint node")
@@ -361,10 +377,11 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                 if type(result)==int and result<0: return result # マイナスの数値の場合エラーのためネクストノードを追加しない
                 next_node_list.extend(gn.out_node_list)
                 """
-                printx.out("node:",gn.node,", result:",result)
+                printx.out("result node:",gn.node,", value:",gn.val)
         #return next_state
 
     def run(self,inputs):
+        outputs=[]
         #self.out_nodes=out_nodes
         #self.network_show()
         """
@@ -375,9 +392,12 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         next_node_list=list(self.network['S'])
         printx.out("next_node_list:",next_node_list)
         """
-        for i in range(10):
+        for i in range(5):
             self.run_tick(inputs[i] if len(inputs)>i else []) # inputが存在するまで
-            printx.out("out: ",[gn.val for gn in self.nodes if gn.ele=="out"])
+            output=[gn.val for gn in self.nodes if gn.ele==out_]
+            outputs.append(output)
+            printx.out("output: ",output)
+        return outputs
 
 
 def adfs(gn,node_body,edge_struct): # 自動定義関数
@@ -905,5 +925,31 @@ def adfs_in12(gn,node_body_in12,edge_struct_in12): # 2入力の自動定義関�
     else: return -1
 
 if __name__ == "__main__":
-    gnps=NP4Gstruct(15,split_,join_,equal,control_gate)
-    gnps.MultiRequirements([("0","1"),("1","0")])
+    """
+    np1=NetworkProgram([('x0','in'),('h0',sig),('y0',out_)],[('x0','h0'),('h0','y0')])
+    printx.on()
+    np1.run([[1]])
+    """
+    node3=[('x0','in'),('x1','in'),('x2','in'),
+        ('h0',tanh),('h1',tanh),('h2',tanh),
+        ('y0',out_),('y1',out_),('y2',out_)]
+    edge3=[('x0','h0'),('x0','h1'),('x0','h2'),
+        ('x1','h0'),('x1','h1'),('x1','h2'),
+        ('x2','h0'),('x2','h1'),('x2','h2'),
+        ('h0','y0'),('h0','y1'),('h0','y2'),
+        ('h1','y0'),('h1','y1'),('h1','y2'),
+        ('h2','y0'),('h2','y1'),('h2','y2')]
+    np3=NetworkProgram(node3,edge3)
+
+    # 重みを指定
+    np3.network.add_weighted_edges_from(
+        [('x0','h0',0),('x0','h1',1),('x0','h2',0),
+        ('x1','h0',1),('x1','h1',0),('x1','h2',0),
+        ('x2','h0',0),('x2','h1',0),('x2','h2',0),
+        ('h0','y0',1),('h0','y1',1),('h0','y2',1),
+        ('h1','y0',1),('h1','y1',1),('h1','y2',1),
+        ('h2','y0',1),('h2','y1',1),('h2','y2',1)])
+
+    printx.on()
+    inputs=[[1,0,0],[0,1,0]]
+    np3.run(inputs)
