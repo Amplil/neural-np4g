@@ -10,7 +10,7 @@ import random
 # 入力ノード数エラー：-1
 # 出力およびその他のエラー：-2
 
-class printx(): # ONのときだけ表示
+class p(): # ONのときだけ表示
     out_on=False
     @classmethod
     def on(cls):
@@ -19,7 +19,7 @@ class printx(): # ONのときだけ表示
     def off(cls):
         cls.out_on=False
     @classmethod
-    def out(cls,*args):
+    def rint(cls,*args):
         if cls.out_on:
             print(*args)
 
@@ -39,220 +39,13 @@ def out_(gn): # 出力関数
     result=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
     return result
 
-def split_(gn):
-    if (gn.in_deg==1): # 入力ノードは1つ
-        result=str(gn.in_ele_list[0]).split() # 入力ノードは1つだけ，リストも文字列にしてしまう
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("split_ len args error")
-        return -1
-
-def join_(gn):
-    if (gn.in_deg==1): # 入力ノードは1つ
-        flatten = lambda x: [z for y in x for z in (flatten(y) if hasattr(y, '__iter__') and not isinstance(y, str) else (y,))]
-        word_list=list(map(str,flatten(gn.in_ele_list))) # すべての入力エッジの要素の平坦化された文字列のリスト
-        sentense=""
-        for word in word_list:
-            if (word!="[NULL]"):
-                sentense+=word+" "
-        result=sentense.rstrip() # 最後のスペースはなくして出力
-        if result=="": result="[NULL]" # 結果が何もない場合、"[NULL]"を出力
-        printx.out(result)
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("join_ len args error")
-        return -1
-
-def div(gn): # gn: DiGraphNode
-    if (gn.in_deg==1): # divの入力ノードは1つ
-        if (gn.out_deg==1): # 出力ノードが1つの場合
-            if not (type(gn.in_ele_list[0])==list): # 入力ノードの要素がリストでない（複数ない）場合
-                result=str(gn.in_ele_list[0]).split() # 入力ノードと入力ノードリストの要素ともに1つだけ
-                return gn.out_ele(gn.out_node_list[0],result) # resultを代入、出力ノードは1つだけ
-            else:
-                printx.out("繰り返し処理の入ったネットワークの繰り返しは関数化によって実現すれば良いため、繰り返し処理で用いるリストの分解深度は1のまま増やさない。すなわち、入力ノードの要素がリストである（複数ある）場合エラー")
-                return -2
-        elif (gn.out_deg==0): # エンドノードの場合
-            return gn.in_ele_list[0] # 入力をそのまま出力
-        else: # 複数出力ノードの場合
-            if not (type(gn.in_ele_list[0])==list): # 入力ノードの要素がリストでない（複数ない）場合
-                result=str(gn.in_ele_list[0]).split() # 入力ノードと入力ノードリストの要素ともに1つだけ
-                if gn.out_deg==len(result): # 出力ノードの数とresultの要素の数が一致する場合
-                    for num,node in enumerate(gn.out_node_list): # pos要素を追加
-                        gn.G.nodes[node]['pos']=num
-                    return list(map(gn.out_ele,gn.out_node_list,result)) # resultはリスト、resultを代入、出力ノードは1つだけ
-                else: # 出力ノードの数とresultの要素の数が一致しない場合
-                    for out_node in gn.out_node_list:
-                        gn.out_ele(out_node,result) # それぞれの出力ノードに同じresultを代入
-            else:
-                printx.out("入力ノードの要素がリストである（複数ある）場合、for文と再帰を使い、出力ノードリストの要素が1つになるまで繰り返す。)")
-                return -2
-    else:
-        printx.out("div len args error")
-        return -1
-
-def sum(gn): # gn: DiGraphNode
-    flatten = lambda x: [z for y in x for z in (flatten(y) if hasattr(y, '__iter__') and not isinstance(y, str) else (y,))]
-    word_list=list(map(str,flatten(gn.in_ele_list))) # すべての入力エッジの要素の平坦化された文字列のリスト
-    sentense=""
-    for word in word_list:
-        if (word!="[NULL]"):
-            sentense+=word+" "
-    result=sentense.rstrip() # 最後のスペースはなくして出力
-    if result=="": result="[NULL]" # 結果が何もない場合、"[NULL]"を出力
-    printx.out(result)
-    for out_node in gn.out_node_list: # 出力ノードは複数でも可
-        gn.out_ele(out_node,result)
-    return result
-def equal(gn):
-    if (gn.in_deg==2):
-        if (type(gn.in_ele_list[0])!=list and type(gn.in_ele_list[1])!=list):
-            ele=[[gn.in_ele_list[i]] for i in range(2)] # 個々にリスト化
-        elif (type(gn.in_ele_list[0])==list and type(gn.in_ele_list[1])==list and len(gn.in_ele_list[0])==len(gn.in_ele_list[1])): # 入力がどちらもリストであり、要素数も同じとき
-            ele=gn.in_ele_list
-        else:
-            printx.out("equal nodes list error")
-            return -2
-        out_list=[]
-        for i in range(len(ele[0])): # 繰り返し処理に対応
-            if (ele[0][i]==ele[1][i]):
-                out="[TRUE]"
-            else:
-                out="[FALSE]"
-            out_list.append(out)
-        if (len(out_list)==1):
-            result=out_list[0]
-        else:
-            result=out_list
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        printx.out(result)
-        #return gn.out_ele(gn.out_node_list[0],result) # resultを代入、出力ノードは1つだけ
-        return result
-    else:
-        printx.out("equal input nodes len error")
-        return -1
-
-def control_gate(gn):
-    # 入力のどちらかが[TRUE]である場合はもう片方のリンクの値を通し、それ以外は[NULL]を出力（[FALSE]でなくてもよい）。
-    if (gn.in_deg==2): # 入力は2つ、出力はすべての関数で固定しない
-        if (type(gn.in_ele_list[0])!=list and type(gn.in_ele_list[1])!=list):
-            ele=[[gn.in_ele_list[i]] for i in range(2)] # 個々にリスト化
-        elif (type(gn.in_ele_list[0])==list and type(gn.in_ele_list[1])==list and len(gn.in_ele_list[0])==len(gn.in_ele_list[1])): # 入力がどちらもリストであり、要素数も同じとき
-            ele=gn.in_ele_list
-        else:
-            printx.out("control_gate nodes list error")
-            return -2
-        out_list=[]
-        for i in range(len(ele[0])): # 繰り返し処理に対応
-            if (ele[0][i]=="[TRUE]"):
-                out=ele[1][i]
-            elif (ele[1][i]=="[TRUE]"):
-                out=ele[0][i]
-            else:
-                out="[NULL]"
-            out_list.append(out)
-        if (len(out_list)==1):
-            result=out_list[0]
-        else:
-            result=out_list
-        printx.out(result)
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("control_gate nodes len error")
-        return -1
-def control_not_gate(gn):
-    # 入力のどちらかが[FALSE]である場合はもう片方のリンクの値を通し、それ以外は[NULL]を出力（[TRUE]でなくてもよい）。
-    if (gn.in_deg==2): # 入力は2つ、出力はすべての関数で固定しない
-        if (type(gn.in_ele_list[0])!=list and type(gn.in_ele_list[1])!=list):
-            ele=[[gn.in_ele_list[i]] for i in range(2)] # 個々にリスト化
-        elif (type(gn.in_ele_list[0])==list and type(gn.in_ele_list[1])==list and len(gn.in_ele_list[0])==len(gn.in_ele_list[1])): # 入力がどちらもリストであり、要素数も同じとき
-            ele=gn.in_ele_list
-        else:
-            printx.out("control_not_gate nodes list error")
-            return -2
-        out_list=[]
-        for i in range(len(ele[0])): # 繰り返し処理に対応
-            if (ele[0][i]=="[FALSE]"):
-                out=ele[1][i]
-            elif (ele[1][i]=="[FALSE]"):
-                out=ele[0][i]
-            else:
-                out="[NULL]"
-            out_list.append(out)
-        if (len(out_list)==1):
-            result=out_list[0]
-        else:
-            result=out_list
-        printx.out(result)
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("control_not_gate nodes len error")
-        return -1
-
-def pos(gn): # 繰り返し処理により入力ノードの要素がリストになっていても関係ない
-    if (gn.in_deg==1):
-        pre_gn=DiGraphNode(gn.G,gn.in_node_list[0])
-        if (pre_gn.in_deg==0):
-            printx.out("pos input node input is start node")
-            #result=-2
-            result=0 # 入力の入力がない場合は0と出力することにする
-        elif (pre_gn.in_deg==1):
-            result=pre_gn.G.nodes[pre_gn.in_node_list[0]].get('pos')
-            if result==None:
-                printx.out("node pos does not exist")
-                #result=""
-                printx.out("node pos does not exist. result=0")
-                result=0 # pos要素がない場合は0と出力することにする
-        else:
-            printx.out("pos input node input is plural")
-            result=-2
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("pos input node len error")
-        return -1
-def out_func(gn): # 出力は繰り返し処理なし
-    if (gn.in_deg==1 and gn.out_deg==0):
-        result=gn.in_ele_list[0]
-        #self.output=result
-        return result
-    else:
-        printx.out("out_func nodes len error")
-        return -1
-#def node_func(gn): # 繰り返し処理により入力ノードの要素がリストになっている場合、リストのまま出力する
-def object_func(gn): # 繰り返し処理により入力ノードの要素がリストになっている場合、リストのまま出力する
-    if (gn.in_deg==1):
-        """
-        if (gn.out_deg==0): # object_funcにエンドポイント機能を持たせる
-            #result="(end point) "+str(gn.in_ele_list[0])
-            result=str(gn.in_ele_list[0])
-        else:
-        """
-        result=gn.in_ele_list[0]
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        return result
-    else:
-        printx.out("object_func input nodes len error")
-        return -1
-
 
 class DiGraphNode(): # 有向グラフの1つのノードにフォーカス
     def __init__(self,G,node):
         self.G=G
         self.node=node
         if (node in G.nodes)==False:
-            printx.out('Error: ',node,' does not exist in the graph')
+            p.rint('Error: ',node,' does not exist in the graph')
             return None
         else:
             self.ele=G.nodes[node]['ele']
@@ -290,7 +83,7 @@ class DiGraphNode(): # 有向グラフの1つのノードにフォーカス
     
     def run_check(self):
         if not callable(self.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
-            printx.out("This is probably object string node.")
+            p.rint("This is probably object string node.")
             return -3
         else:
             result=self.ele(self)
@@ -331,11 +124,10 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
             if not callable(gn.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
                 [gn.out_ele(out_node,gn.ele) for out_node in gn.out_node_list] # 出力エッジ要素をノード要素とする
         """
-    def network_show(self):
+    def view_graph(self):
         print("nodes: ",self.network.nodes.data())
         print("edges: ",self.network.edges.data())
-        nx.draw_networkx(self.network)
-        plt.show()
+        return nx.nx_agraph.view_pygraphviz(self.network,prog='dot')  # pygraphvizが必要
 
     def run_tick(self,input=[]):
         #next_node_list=[]
@@ -349,14 +141,14 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                 else:
                     gn.update_val(0)
             gn.node_val_out() # ノードの値を出力エッジに反映させる
-            #printx.out("node:",gn.node,", value:",gn.val)
+            #p.rint("node:",gn.node,", value:",gn.val)
 
         self.nodes=[DiGraphNode(self.network,node) for node in self.network.nodes] # gnの更新作業
 
         for gn in self.nodes:
             """
             if not callable(gn.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
-                #printx.out("Error: This is probably object string node.")
+                #p.rint("Error: This is probably object string node.")
                 #return []
                 next_state.append(gn.ele)
             elif (gn.out_deg!=0 and gn.out_ele_list[0]!="") or (node in self.endpoint_node):
@@ -370,14 +162,14 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                 gn.update_val(result)
                 """
                 if gn.out_deg==0:
-                    printx.out("This is endpoint node")
+                    p.rint("This is endpoint node")
                     #result=gn.ele(gn)
                     self.output.append(result) # outputはリストにする
                     self.endpoint_node.append(node) # エンドポイントノードとして追加
                 if type(result)==int and result<0: return result # マイナスの数値の場合エラーのためネクストノードを追加しない
                 next_node_list.extend(gn.out_node_list)
                 """
-                printx.out("result node:",gn.node,", value:",gn.val)
+                p.rint("result node:",gn.node,", value:",gn.val)
         #return next_state
 
     def run(self,inputs):
@@ -386,24 +178,24 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         #self.network_show()
         """
         if not 'S' in list(self.network.nodes):
-            printx.out("'S' node doesn't exist")
+            p.rint("'S' node doesn't exist")
             return ''
-        printx.out("node: in =",self.network.nodes['S']['ele'])
+        p.rint("node: in =",self.network.nodes['S']['ele'])
         next_node_list=list(self.network['S'])
-        printx.out("next_node_list:",next_node_list)
+        p.rint("next_node_list:",next_node_list)
         """
         for i in range(5):
             self.run_tick(inputs[i] if len(inputs)>i else []) # inputが存在するまで
             output=[gn.val for gn in self.nodes if gn.ele==out_]
             outputs.append(output)
-            printx.out("output: ",output)
+            p.rint("output: ",output)
         return outputs
 
 
 def adfs(gn,node_body,edge_struct): # 自動定義関数
     #if (gn.in_deg==1 and gn.out_deg==1): # 入力も出力もノードは1つ
-    printx.out("adfs node_body: ",node_body)
-    printx.out("adfs edge_struct: ",edge_struct)
+    p.rint("adfs node_body: ",node_body)
+    p.rint("adfs edge_struct: ",edge_struct)
     if (gn.in_deg==1): # 入力は1つ
         if (type(gn.in_ele_list[0])!=list): # 繰り返し処理に対応
             in_list=[gn.in_ele_list[0]]
@@ -411,9 +203,9 @@ def adfs(gn,node_body,edge_struct): # 自動定義関数
             in_list=gn.in_ele_list[0]
 
         out_list=[]
-        #printx.out("adfs input:",in_list)
+        #p.rint("adfs input:",in_list)
         for input in in_list: # 繰り返し処理に対応
-            printx.out("adfs input:",input)
+            p.rint("adfs input:",input)
             #node_struct=[('S',input)]
             #node_struct.extend(node_body)
             #node_struct.append(('out',out_func))
@@ -427,10 +219,10 @@ def adfs(gn,node_body,edge_struct): # 自動定義関数
             result=out_list
         #return gn.out_ele(gn.out_node_list[0],result) # resultを代入、出力ノードは1つだけ
 
-        printx.out(result)
+        p.rint(result)
         for out_node in gn.out_node_list: # 出力ノードは複数でも可
             gn.out_ele(out_node,result)
-        printx.out("adfs out:",result)
+        p.rint("adfs out:",result)
         return result
     else: return -1
 
