@@ -23,20 +23,23 @@ class p(): # ONのときだけ表示
         if cls.out_on:
             print(*args)
 
-def sig(gn): # シグモイド関数
-    x=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+def sigmoid(gn): # シグモイド関数
+    # sumを関数内で行う必要があるのかどうか今後検討
+    x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
     result = 1 / (1 + np.exp(-x)) # シグモイド関数の演算
-    #for out_node in gn.out_node_list:  # Output to all connected nodes
+    #for out_node in gn.out_nodes:  # Output to all connected nodes
     #    gn.out_ele(out_node, result)
     return result
 
 def tanh(gn): # tanh関数
-    x=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+    # sumを関数内で行う必要があるのかどうか今後検討
+    x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
     result = np.tanh(x)
     return result
 
 def out_(gn): # 出力関数
-    result=np.sum([gn.in_w_list[i]*gn.in_val_list[i] for i in range(gn.in_deg)]) # w1*in1+w2*in2+...+wt*int
+    # sumを関数内で行う必要があるのかどうか今後検討
+    result=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
     return result
 
 
@@ -52,11 +55,12 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
             self.val=G.nodes[node]['val']
             self.in_deg=G.in_degree(node)
             self.out_deg=G.out_degree(node)
-            self.in_node_list=list(G.pred[node])
-            self.out_node_list=list(G[node])
-            self.in_val_list=[G.edges[n,node]['val'] for n in self.in_node_list] # in edge element list
-            #self.out_ele_list=[G.edges[node,n]['ele'] for n in self.out_node_list] # out edge element list
-            self.in_w_list=[G.edges[n,node]['weight'] for n in self.in_node_list] # in edge weight list
+            self.in_nodes=list(G.pred[node])
+            self.out_nodes=list(G[node])
+            self.in_vals=[G.edges[n,node]['val'] for n in self.in_nodes] # in edge element list
+            #self.out_eles=[G.edges[node,n]['ele'] for n in self.out_nodes] # out edge element list
+            self.in_ws=[G.edges[n,node]['weight'] for n in self.in_nodes] # in edge weight list
+            self.out_ws=[G.edges[node,n]['weight'] for n in self.out_nodes] # in edge weight list
         
     def in_ele(self,in_node,element=None): # in edge element
         if(element!=None):
@@ -77,9 +81,9 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
             self.G.edges[self.node,out_node]['val']=value
         return self.G.edges[self.node,out_node]['val']
     
-    def node_val_out(self): # ノードの値を出力エッジに反映させる
-        for out_node in self.out_node_list: # 出力ノードは複数でも可
-            self.out_val(out_node,value=self.val)
+    def edge_out(self): # ノードの値を出力エッジに重みを掛け合わせた値を反映させる
+        for i in range(self.out_deg): # 出力ノードは複数でも可
+            self.out_val(self.out_nodes[i],value=self.val*self.out_ws[i])
     
     def run_check(self):
         if not callable(self.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
@@ -108,7 +112,7 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
         elif ele!="": # 要素が指定されてる場合はその要素だけのGraphNodeのリスト
             self.gns=[gn for gn in self.gns if gn.ele==ele]
 
-    def value(self,val=[]):
+    def value(self,val=[]): # 複数ノードの値の出力と更新
         if(val!=[]):
             if type(val)==list:
                 if len(val)==len(self.gns): # 代入する値の個数がノードの個数と合っているかどうか
@@ -121,11 +125,11 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
                 [gn.update_val(val) for gn in self.gns]
                 return True
         else: # valが指定されてないとき
-            return [gn.val for gn in self.gns] # すべてのノードの値を出力する
+            return [gn.val for gn in self.gns] # ノードの値を出力する
         
-    def val_out(self): # すべてのノードの値を出力エッジに反映させる
+    def edges_out(self): # すべてのノードの値を出力エッジに反映させる
         for gn in self.gns:
-            gn.node_val_out() # ノードの値を出力エッジに反映させる
+            gn.edge_out() # ノードの値を出力エッジに反映させる
 
 
 class NetworkProgram(): # ネットワーク構造データからプログラムを実行
@@ -154,7 +158,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         for node in self.G.nodes:
             gn=GraphNode(self.G,node)
             if not callable(gn.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
-                [gn.out_ele(out_node,gn.ele) for out_node in gn.out_node_list] # 出力エッジ要素をノード要素とする
+                [gn.out_ele(out_node,gn.ele) for out_node in gn.out_nodes] # 出力エッジ要素をノード要素とする
         """
     def view_network(self):
         p.rint("nodes: ",self.G.nodes.data()) # 必要に応じて表示
@@ -168,7 +172,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
     def run_tick(self):
         # 先にすべてのノードの値を出力エッジに反映させる
         #nodes=Nodes(self.G) # 複数のノードそれぞれにフォーカス
-        Nodes(self.G).val_out() # すべてのノードの値を出力エッジに反映させる
+        Nodes(self.G).edges_out() # すべてのノードの値を出力エッジに反映させる
         #p.rint("node:",gn.node,", value:",gn.val)
 
         for gn in Nodes(self.G,"callable").gns: # （入力ノード以外の）実行のできるノード
