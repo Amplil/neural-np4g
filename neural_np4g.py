@@ -25,7 +25,7 @@ class p(): # ONのときだけ表示
 
 def sigmoid(gn): # シグモイド関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
+    x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
     result = 1 / (1 + np.exp(-x)) # シグモイド関数の演算
     #for out_node in gn.out_nodes:  # Output to all connected nodes
     #    gn.out_ele(out_node, result)
@@ -33,53 +33,49 @@ def sigmoid(gn): # シグモイド関数
 
 def tanh(gn): # tanh関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
+    x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
     result = np.tanh(x)
     return result
 
 def out_(gn): # 出力関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    result=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
+    result=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
     return result
 
 def derivative(gn): # 導関数
     #x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
     if gn.ele==tanh: # ノードの関数がtanhの場合
-        return 1-gn.val**2 # d/dx(tanh(x))=1-y^2
-    ### 出力ノードの誤差は教師データとの差なので導関数では定義しない
-    """
-    elif gn.ele==out_: # ノードの関数がtanhの場合
-        return ... # d/dx(x)=1
-    """
+        return 1-gn.val()**2 # d/dx(tanh(x))=1-y^2
+    elif gn.ele==out_: # ノードの関数がout_の場合
+        return 1 # d/dx(x)=1
 
 
 class GraphNode(): # グラフ（ネットワーク）の1つのノードにフォーカス
-    def __init__(self,G,node):
+    def __init__(self,G,name):
         self.G=G
-        self.node=node
-        if (node in G.nodes)==False:
-            p.rint('Error: ',node,' does not exist in the graph')
+        self.name=name
+        if (name in G.nodes)==False:
+            p.rint('Error: ',name,' does not exist in the graph')
             return None
         else:
-            self.ref=G.nodes[node] # self.ref['ele'],self.ref['val']で参照ができる
-            self.ele=self.ref['ele']
-            self.val=self.ref['val']
-            self.d=self.ref['delta']
+            self.in_deg=G.in_degree(name)
+            self.out_deg=G.out_degree(name)
+            self.in_nodes=list(G.pred[name])
+            self.out_nodes=list(G[name])
 
+            self.ref=G.nodes[name] # self.ref['ele'],self.ref['val']で参照ができる
+            self.in_refs=[G.edges[n,name] for n in self.in_nodes] # self.in_refs[i]['val']で参照できる
+            self.out_refs=[G.edges[name,n] for n in self.out_nodes] # in self.out_refs[i]['val']で参照できる
 
-            self.in_deg=G.in_degree(node)
-            self.out_deg=G.out_degree(node)
-            self.in_nodes=list(G.pred[node])
-            self.out_nodes=list(G[node])
-
-            self.in_refs=[G.edges[n,node] for n in self.in_nodes] # self.in_refs[i]['val']で参照できる
-            self.out_refs=[G.edges[node,n] for n in self.out_nodes] # in self.out_refs[i]['val']で参照できる
-            self.in_vals=np.array([G.edges[n,node]['val'] for n in self.in_nodes]) # in edge element list
-            #self.out_eles=[G.edges[node,n]['ele'] for n in self.out_nodes] # out edge element list
-            self.in_ws=np.array([G.edges[n,node]['weight'] for n in self.in_nodes]) # in edge weight list
-            self.out_ws=np.array([G.edges[node,n]['weight'] for n in self.out_nodes]) # in edge weight list
-            self.in_ds=np.array([G.edges[n,node]['delta'] for n in self.in_nodes]) # in edge weight list
-            self.out_ds=np.array([G.edges[node,n]['delta'] for n in self.out_nodes]) # in edge weight list
+            self.ele=self.ref['ele'] # eleは変数のまま
+            self.val=lambda val=None: self.node_ref('val',val)
+            self.d=lambda d=None: self.node_ref('delta',d)
+            self.in_val=lambda val=None: self.edge_ref('val',True,val)
+            self.out_val=lambda val=None: self.edge_ref('val',False,val)
+            self.in_w=lambda w=None: self.edge_ref('weight',True,w)
+            self.out_w=lambda w=None: self.edge_ref('weight',False,w)
+            self.in_d=lambda d=None: self.edge_ref('delta',True,d)
+            self.out_d=lambda d=None: self.edge_ref('delta',False,d)
         
     """
     def in_ele(self,in_node,element=None): # in edge element
@@ -95,22 +91,48 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
 
     def out_ele(self,out_node,element=None): # out edge element
         if(element!=None):
-            self.G.edges[self.node,out_node]['ele']=element
-        return self.G.edges[self.node,out_node]['ele']
+            self.G.edges[self.name,out_node]['ele']=element
+        return self.G.edges[self.name,out_node]['ele']
     """
 
-    def out_val(self,out_node,value=None): # out edge element
-        if(value!=None):
-            self.G.edges[self.node,out_node]['val']=value
-        return self.G.edges[self.node,out_node]['val']
+    def node_ref(self,name='val',val=None): # ノードを参照する
+        if val is None: # val()で値を出力
+            return self.ref[name]
+        else:
+            self.ref[name]=np.float64(val)
+            return np.float64(val)
+    def edge_ref(self,name='val',inflow=True,val=None): # エッジを参照する、流出の場合inflow=False
+        if inflow:
+            refs=self.in_refs
+            deg=self.in_deg
+        else:
+            refs=self.out_refs
+            deg=self.out_deg
+        if val is not None:
+            if type(val)==list or type(val)==np.ndarray:
+                if len(val)==deg: # 代入する値の個数がノードの個数と合っているかどうか
+                    for i,ref in enumerate(refs):
+                        ref[name]=np.float64(val[i])
+                    return np.array(val)
+                else:
+                    print("代入する値の個数がノードの個数と合いません。")
+                    return False
+            else: # リストでなければ数値が考えられる。それ以外はエラー
+                val=np.float64(val)
+                for ref in refs:
+                    ref[name]=val # nameを参照して値を変える
+                return val
+        else: # valが指定されてないとき
+            return np.array([ref[name] for ref in refs]) # ノードの値を出力する
     
+    """
     def edge_out(self): # ノードの値を出力エッジに重みを掛け合わせた値を反映させる
-        for i in range(self.out_deg): # 出力ノードは複数でも可
-            self.out_val(self.out_nodes[i],value=self.val*self.out_ws[i])
-
-    def edge_in(self): # ノードの値を入力エッジに反映させる
-        for in_ref in self.in_refs: # 入力ノードは複数でも可
-            in_ref['delta']=self.d
+        self.out_val(self.val*self.out_w())
+    def edge_in(self): # ノードの要素を入力エッジに反映させる
+        self.in_d(self.d)
+    def edge_direct_out(self): # ノードの値を出力エッジにそのまま反映させる
+        self.out_val(self.val)
+    """
     
     def run_check(self):
         if not callable(self.ele): # ノード要素が関数でない場合(変数(オブジェクト:文字列)のとき)
@@ -132,83 +154,99 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
 class Nodes(): # 複数のノードそれぞれにフォーカス
     def __init__(self,G,ele=""):
         self.G=G
-        self.names=list(G.nodes)
-        self.gns=[GraphNode(G,name) for name in self.names] # すべてのノードのGraphNodeのリスト
+        #self.names=list(G.nodes)
+        self.all_gns=[GraphNode(G,name) for name in list(G.nodes)] # すべてのノードのGraphNodeのリスト
         if ele=="callable": # 入力ノード以外の呼び出し可能な要素だけのGraphNodeのリスト
-            self.gns=[gn for gn in self.gns if callable(gn.ele)]
+            self.gns=[gn for gn in self.all_gns if callable(gn.ele)]
         elif ele!="": # 要素が指定されてる場合はその要素だけのGraphNodeのリスト
-            self.gns=[gn for gn in self.gns if gn.ele==ele]
+            self.gns=[gn for gn in self.all_gns if gn.ele==ele]
+        else: # デフォルトですべてのノードを選択
+            self.gns=self.all_gns
 
-    def value(self,val=[]): # 複数ノードの値の出力と更新
-        if(val!=[]):
-            if type(val)==list:
+    def value(self,val=None): # 複数ノードの値の出力と更新
+        if val is not None:
+            if type(val)==list or type(val)==np.ndarray:
                 if len(val)==len(self.gns): # 代入する値の個数がノードの個数と合っているかどうか
                     for i,gn in enumerate(self.gns):
-                        gn.ref['val']=val[i] # valを参照して値を変える
+                        gn.val(val[i]) # valを参照して値を変える
                     #[gn.update_val(val[i]) for i,gn in enumerate(self.gns)]
-                    return True
+                    return np.array(val)
                 else:
                     print("代入する値の個数がノードの個数と合いません。")
                     return False
             else: # リストでなければ数値が考えられる。それ以外はエラー
                 for gn in self.gns:
-                    gn.ref['val']=val # valを参照して値を変える
+                    gn.val(val) # valを参照して値を変える
                 #[gn.update_val(val) for gn in self.gns]
-                return True
+                return np.float64(val)
         else: # valが指定されてないとき
-            return np.array([gn.val for gn in self.gns]) # ノードの値を出力する
+            return np.array([gn.val() for gn in self.gns]) # ノードの値を出力する
         
-    def delta(self,d=[]): # 複数ノードの値の出力と更新
-        if(d!=[]):
-            if type(d)==list:
+    def delta(self,d=None): # 複数ノードの値の出力と更新
+        if d is not None:
+            if type(d)==list or type(d)==np.ndarray:
                 if len(d)==len(self.gns): # 代入する値の個数がノードの個数と合っているかどうか
                     for i,gn in enumerate(self.gns):
-                        gn.ref['delta']=d[i] # valを参照して値を変える
+                        gn.d(d[i]) # valを参照して値を変える
                     #[gn.update_val(val[i]) for i,gn in enumerate(self.gns)]
-                    return True
+                    return np.array(d)
                 else:
                     print("代入する値の個数がノードの個数と合いません。")
                     return False
             else: # リストでなければ数値が考えられる。それ以外はエラー
                 for gn in self.gns:
-                    gn.ref['delta']=d # valを参照して値を変える
+                    gn.d(d) # valを参照して値を変える
                 #[gn.update_val(val) for gn in self.gns]
-                return True
+                return np.float64(d)
         else: # valが指定されてないとき
-            return np.array([gn.d for gn in self.gns]) # ノードの値を出力する
+            return np.array([gn.d() for gn in self.gns]) # ノードの値を出力する
         
     def edges_out(self): # すべてのノードの値を出力エッジに反映させる
         for gn in self.gns:
-            gn.edge_out() # ノードの値を出力エッジに反映させる
+            #gn.edge_out() # ノードの値を出力エッジに反映させる
+            gn.out_val(gn.val()*gn.out_w()) # ノードの値を出力エッジに反映させる
+        #self.reflect() # networkxにすべてのノードを反映させる
         
     def edges_in(self): # すべてのノードの誤差deltaを入力エッジに反映させる
         for gn in self.gns:
-            gn.edge_in() # ノードの値を出力エッジに反映させる
+            #gn.edge_in() # ノードの値を出力エッジに反映させる
+            gn.in_d(gn.d()) # ノードの値を出力エッジに反映させる
+        #self.reflect() # networkxにすべてのノードを反映させる
+
+    def edges_direct_out(self): # すべてのノードの値を出力エッジに反映させる
+        for gn in self.gns:
+            #gn.edge_direct_out() # ノードの値を出力エッジに反映させる
+            gn.out_val(gn.val()) # ノードの値を出力エッジに反映させる
+        #self.reflect() # networkxにすべてのノードを反映させる
+
+    def select(self,ele=""): # 要素を選択してノードを抽出する
+        if ele=="callable": # 入力ノード以外の呼び出し可能な要素だけのGraphNodeのリスト
+            self.gns=[gn for gn in self.all_gns if callable(gn.ele)]
+        elif ele!="": # 要素が指定されてる場合はその要素だけのGraphNodeのリスト
+            self.gns=[gn for gn in self.all_gns if gn.ele==ele]
+        else: # デフォルトですべてのノードを選択
+            self.gns=self.all_gns
+        return self
+    """
+    def reflect(self): # networkxに値を反映させる
+        for gn in self.gns:
+            gn.ref['val']=gn.val # valを参照して値を変える
+            gn.ref['delta']=gn.d # deltaを参照して値を変える
+        self.__init__(self.G) # エッジの反映を適用する
+    """
 
 
 class NetworkProgram(): # ネットワーク構造データからプログラムを実行
     #def __init__(self,input,node_struct,edge_struct):
     def __init__(self,node_struct,edge_struct):
-        #self.input="0 1 0"
         self.input=input
-        #self.output=""
-        #self.endpoint_node=[] # 出力オブジェクトに接続されるノードのリスト
         self.G=nx.DiGraph()
         self.states=[]
 
-        #node_struct=[('S',input)]
-        #node_struct.extend(node_body)
-        #node_struct.append(('out',out_func))
         self.G.add_nodes_from([(tup[0],{'ele':tup[1],'val': 0.,'delta': 0.}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
         self.G.add_edges_from(edge_struct)
         self.G.add_edges_from(list(map(lambda tup: tup+({'val': 0.,'delta': 0.},) ,self.G.edges))) # エッジ要素を0.で初期化する
         self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.G.edges))) # 重みを乱数で初期化する
-
-        #self.nodes=[GraphNode(self.G,node) for node in self.G.nodes] # gnのlist
-        #self.nodes= Nodes(self.G) # 複数のノードそれぞれにフォーカス
-
-        #self.in_nodes=[GraphNode(self.G,gn.node) for gn in self.nodes if gn.ele=='in'] # gnのlist
-        #self.out_nodes=[GraphNode(self.G,gn.node) for gn in self.nodes if gn.ele=='out'] # gnのlist
         """
         for node in self.G.nodes:
             gn=GraphNode(self.G,node)
@@ -224,30 +262,31 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         print("nodes: ",self.G.nodes.data())
         print("edges: ",self.G.edges.data())
 
-    def run_tick(self):
-        Nodes(self.G).edges_out() # 先にすべてのノードの値を出力エッジに反映させる
+    def run_tick(self,nodes):
+        #self.states.append(Nodes(self.G).value()) # 状態の保存（すべてのノードの値）
+        nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
 
-        for gn in Nodes(self.G,"callable").gns: # （入力ノード以外の）実行のできるノード
-            result=gn.ele(gn) # ノードの実行
-            gn.ref['val']=result # valを参照して値を変える
-            p.rint("result node:",gn.node,", value:",gn.val)
-        output=Nodes(self.G,out_).value() # 出力ノードの値
-        state=Nodes(self.G).value() # すべてのノードの値
-        self.states.append(state)
+        for gn in nodes("callable").gns: # （入力ノード以外の）実行のできるノード
+            gn.val(gn.ele(gn)) # ノードの実行してノードの値を変える
+            p.rint("result node:",gn.name,", value:",gn.val())
+        output=nodes(out_).value() # 出力ノードの値
+        self.states.append(nodes().value()) # 状態の保存（すべてのノードの値）
         p.rint("output: ",output)
-        return output,state
+        return output
 
-    def run(self,inputs_list):
+    def forward(self,inputs_list):
         outputs=[]
         self.states=[]
         #self.out_nodes=out_nodes
-        #self.network_show()
-        in_nodes=Nodes(self.G,"in") # すべての入力ノード
+        nodes=Nodes(self.G).select # selectありきでnodesを組む。つまりnodesは関数
+        nodes().value(0) # すべてのノードの値を0にリセットする
+        nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
+        #in_nodes=Nodes(self.G,"in") # すべての入力ノード
         for inputs in inputs_list: # inputs_listの長さ分実行
             p.rint("inputs: ",inputs)
-            in_nodes.value(inputs) # 入力ノードにinputsの値をそれぞれ入れていく
-            outputs.append(self.run_tick())
-        in_nodes.value(0) # 入力し終わったら、すべての入力ノードの値を0にリセットする
+            nodes("in").value(inputs) # 入力ノードにinputsの値をそれぞれ入れていく
+            outputs.append(self.run_tick(nodes))
+        nodes("in").value(0) # 入力し終わったら、すべての入力ノードの値を0にリセットする
 
         N=1 # 繰り返し回数
         for _ in range(N): # 入力が終わったあとN回繰り返す
@@ -255,34 +294,45 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
             #output=self.run_tick()
             #output=Nodes(self.G,out_).value() # 出力ノードの値をoutputに書き出す
             #output=[gn.val for gn in self.nodes if gn.ele==out_] # 出力ノードの値をoutputに書き出す
-            outputs.append(self.run_tick())
+            outputs.append(self.run_tick(nodes))
             #p.rint("output: ",output)
+        #nodes().reflect() # networkxにすべてのノードを反映させる
         return np.array(outputs)
     
-    def backward(self,inputs_list,outputs_list):
+    def backward(self,outputs_list):
+        out_reverse=np.array(outputs_list)[::-1] # 逆順にする
+        state_reverse=self.states[::-1] # 逆順にする
         self.eta=1 # 暫定値
-        out_nodes=Nodes(self.G,out_) # すべての出力ノード
-        all_nodes=Nodes(self.G) # すべてのノード
-        for outputs in np.array(outputs_list):
-            p.rint("outputs: ",outputs)
-            d=out_nodes.value()-outputs # 出力ノードの誤差
-            out_nodes.delta(d) # 出力ノードの誤差を入れていく
+        nodes=Nodes(self.G).select # selectありきでnodesを組む。つまりnodesは関数
+        nodes().delta(0) # 誤差deltaのリセット
+        nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
+        for i,outputs in enumerate(out_reverse):
+            p.rint("train data: ",outputs)
+            nodes().value(state_reverse[i]) # 状態を読みこむ
+            nodes().edges_direct_out() # 先にすべてのノードの値を出力エッジに反映させる
 
-            for gn in Nodes(self.G,"callable").gns: # （入力ノード以外の）実行のできるノード
-                #if gn.ele!=out_: # 出力ノード以外->出力エッジがなければ実行されないためいらない
-                d=derivative(gn)*sum([gn.out_ds[i]*gn.out_ws[i] for i in range(gn.in_deg)]) # 誤差
-                gn.ref['delta']+=d # 誤差deltaを加える（出力誤差との足し合わせ）
+            #out_nodes=Nodes(self.G,out_) # すべての出力ノード
+            ds=nodes(out_).value()-outputs # 出力ノードの誤差
+            nodes(out_).delta(ds) # 出力ノードの誤差を入れていく
 
-                for i,in_val in enumerate(gn.in_vals):
-                    #dw=[-self.eta*delta*in_val for in_val in gn.in_vals] # 重みの更新量
-                    dw=-self.eta*gn.ref['delta']*in_val # 重みの更新量
-                    gn.in_refs[i]['weight']+=dw # dwだけ更新する
-                p.rint("update node ",gn.node,", delta:",gn.ref['delta'],", weights:",gn.in_ws)
+            for gn in nodes("callable").gns: # （入力ノード以外の）実行のできるノード
+                if gn.ele!=out_: # 出力ノード以外->出力エッジがなければ実行されないためいらない
+                    #gn.ref['delta']+=derivative(gn)*np.sum(gn.out_ds*gn.out_ws) # 誤差deltaを加える（出力誤差との足し合わせ）
+                    gn.d(derivative(gn)*np.sum(gn.out_d()*gn.out_w())) # 誤差deltaを加える（出力誤差との足し合わせ）
 
-            Nodes(self.G).edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
+                dw=-self.eta*gn.d()*gn.in_val() # 重みの更新量
+                #dw=self.eta*gn.ref['delta']*in_val # 重みの更新量
+                #gn.in_ws[j]+=dw # dwだけ更新する
+                #gn.in_refs[j]['weight']+=dw # dwだけ更新する
+                gn.in_w(gn.in_w()+dw) # dwだけ加えて更新する
+                p.rint("update node ",gn.name,", delta:",gn.d(),", weights:",gn.in_w())
 
+            nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
             #self.network_info()
 
+        nodes().value(0) # 状態を読みこむ
+        nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
+        #nodes().reflect() # networkxにすべてのノードを反映させる
         return self.network_info()
 
 
@@ -814,7 +864,7 @@ if __name__ == "__main__":
     """
     np1=NetworkProgram([('x0','in'),('h0',sig),('y0',out_)],[('x0','h0'),('h0','y0')])
     p.on()
-    np1.run([[1]])
+    np1.forward([[1]])
     """
     node3=[('x0','in'),('x1','in'),('x2','in'),
         ('h0',tanh),('h1',tanh),('h2',tanh),
@@ -839,6 +889,32 @@ if __name__ == "__main__":
     p.on()
     inputs_list=[[1,0,0],[0,1,0]]
     outputs_list=[[0,0,0],[0,1,0],[1,0,0]]
-    states=np3.run(inputs_list)
-    print(states)
-    np3.backward(states,outputs_list)
+    np3.forward(inputs_list)
+    np3.backward(outputs_list)
+    #np3.forward(inputs_list)
+    #np3.backward(outputs_list)
+
+    """
+    node_rnn=[('x0','in'),('x1','in'),('x2','in'),
+            ('h0',tanh),('h1',tanh),('h2',tanh),
+            ('y0',out_),('y1',out_),('y2',out_)]
+    edge_rnn=[('x0','h0'),('x0','h1'),('x0','h2'),
+            ('x1','h0'),('x1','h1'),('x1','h2'),
+            ('x2','h0'),('x2','h1'),('x2','h2'),
+            ('h0','h0'),('h0','h1'),('h0','h2'),
+            ('h1','h0'),('h1','h1'),('h1','h2'),
+            ('h2','h0'),('h2','h1'),('h2','h2'),
+            ('h0','y0'),('h1','y1'),('h2','y2')]
+    np_rnn=NetworkProgram(node_rnn,edge_rnn)
+
+    # 重みを指定
+    np_rnn.G.add_weighted_edges_from(
+        [('x0','h0',1),('x0','h1',10),('x0','h2',0),
+        ('x1','h0',0),('x1','h1',1),('x1','h2',0),
+        ('x2','h0',0),('x2','h1',0),('x2','h2',1),
+        ('h0','h0',0),('h0','h1',-100),('h0','h2',0),
+        ('h1','h0',0),('h1','h1',1),('h1','h2',0),
+        ('h2','h0',0),('h2','h1',-100),('h2','h2',0),
+        ('h0','y0',1),('h1','y1',1),('h2','y2',1)])
+    np_rnn.forward([[0,1,0],[1,0,0]])
+    """
