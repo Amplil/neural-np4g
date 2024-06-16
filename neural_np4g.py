@@ -36,17 +36,22 @@ def tanh(gn): # tanh関数
     x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
     result = np.tanh(x)
     return result
-
+"""
 def out_(gn): # 出力関数
+    # sumを関数内で行う必要があるのかどうか今後検討
+    result=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
+    return result
+"""
+def affine(gn): # 多変数の一次関数（ノーマル関数）
     # sumを関数内で行う必要があるのかどうか今後検討
     result=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
     return result
 
 def derivative(gn): # 導関数
     #x=np.sum(gn.in_vals) # w1*in1+w2*in2+...+wt*int
-    if gn.attr==tanh: # ノードの関数がtanhの場合
+    if gn.func==tanh: # ノードの関数がtanhの場合
         return 1-gn.val()**2 # d/dx(tanh(x))=1-y^2
-    elif gn.attr==out_: # ノードの関数がout_の場合
+    elif gn.func==affine: # ノードの関数がaffineの場合
         return 1 # d/dx(x)=1
 
 
@@ -67,6 +72,7 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
             self.in_refs=[G.edges[n,name] for n in self.in_nodes] # self.in_refs[i]['value']で参照できる
             self.out_refs=[G.edges[name,n] for n in self.out_nodes] # in self.out_refs[i]['value']で参照できる
 
+            self.func=self.ref['function'] # funcは定数扱いとするため変数関数にしない
             self.attr=self.ref['attribute'] # attrは定数扱いとするため変数関数にしない
             # 変数関数
             self.val=lambda val=None: self.node_ref('value',val)
@@ -114,9 +120,11 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
         self.G=G
         #self.names=list(G.nodes)
         self.all_gns=[GraphNode(G,name) for name in list(G.nodes)] # すべてのノードのGraphNodeのリスト
+        """
         if attr=="callable": # 入力ノード以外の呼び出し可能な属性だけのGraphNodeのリスト
             self.gns=[gn for gn in self.all_gns if callable(gn.attr)]
-        elif attr!="": # 属性が指定されてる場合はその属性だけのGraphNodeのリスト
+        """
+        if attr!="": # 属性が指定されてる場合はその属性だけのGraphNodeのリスト
             self.gns=[gn for gn in self.all_gns if gn.attr==attr]
         else: # デフォルトですべてのノードを選択
             self.gns=self.all_gns
@@ -168,9 +176,11 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
             gn.out_val(gn.val()) # ノードの値を出力エッジに反映させる
 
     def select(self,attr=""): # 属性を指定してノードを抽出する
+        """
         if attr=="callable": # 入力ノード以外の呼び出し可能な属性だけのGraphNodeのリスト
             self.gns=[gn for gn in self.all_gns if callable(gn.attr)]
-        elif attr!="": # 属性が指定されてる場合はその属性だけのGraphNodeのリスト
+        """
+        if attr!="": # 属性が指定されてる場合はその属性だけのGraphNodeのリスト
             self.gns=[gn for gn in self.all_gns if gn.attr==attr]
         else: # デフォルトですべてのノードを選択
             self.gns=self.all_gns
@@ -184,7 +194,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         self.G=nx.DiGraph()
         self.states=[]
 
-        self.G.add_nodes_from([(tup[0],{'attribute':tup[1],'value': np.float64(0),'delta': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
+        self.G.add_nodes_from([(tup[0],{'function':tup[1],'attribute':tup[2],'value': np.float64(0),'delta': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
         self.G.add_edges_from(edge_struct)
         self.G.add_edges_from(list(map(lambda tup: tup+({'value': np.float64(0),'delta': np.float64(0)},) ,self.G.edges))) # エッジ要素を0.で初期化する
         self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.G.edges))) # 重みを乱数で初期化する
@@ -202,10 +212,10 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         #self.states.append(Nodes(self.G).value()) # 状態の保存（すべてのノードの値）
         nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
 
-        for gn in nodes("callable").gns: # （入力ノード以外の）実行のできるノード
-            gn.val(gn.attr(gn)) # ノードの実行してノードの値を変える
+        for gn in nodes().gns: # すべてのノード（入力ノードであっても入力エッジがあれば実行できるようにする）
+            gn.val(gn.func(gn)) # ノードの実行してノードの値を変える
             p.rint("result node:",gn.name,", value:",gn.val())
-        output=nodes(out_).val() # 出力ノードの値
+        output=nodes("out").val() # 出力ノードの値
         self.states.append(nodes().val()) # 状態の保存（すべてのノードの値）
         p.rint("output: ",output)
         return output
@@ -246,12 +256,14 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
             nodes().val(state_reverse[i]) # 状態を読みこむ
             nodes().edges_direct_out() # 先にすべてのノードの値を出力エッジに反映させる
 
-            #out_nodes=Nodes(self.G,out_) # すべての出力ノード
-            ds=nodes(out_).val()-outputs # 出力ノードの誤差
-            nodes(out_).d(ds) # 出力ノードの誤差を入れていく
+            if outputs is Ellipsis: # outputsに省略記号(...)が使われている場合
+                ds=0 # 誤差は0として扱う
+            else:
+                ds=nodes("out").val()-outputs # 出力ノードの誤差
+            nodes("out").d(ds) # 出力ノードの誤差を入れていく
 
-            for gn in nodes("callable").gns: # （入力ノード以外の）実行のできるノード
-                if gn.attr!=out_: # 出力ノード以外->出力エッジがなければ実行されないためいらない
+            for gn in nodes().gns: # すべてのノード（入力ノードであっても入力エッジがあれば実行できるようにする）
+                if gn.attr!="out": # 出力ノード以外
                     #gn.ref['delta']+=derivative(gn)*np.sum(gn.out_ds*gn.out_ws) # 誤差deltaを加える（出力誤差との足し合わせ）
                     gn.d(derivative(gn)*np.sum(gn.out_d()*gn.out_w())) # 誤差deltaを加える（出力誤差との足し合わせ）
 
@@ -265,9 +277,16 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
             nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
             #self.network_info()
 
-        nodes().val(0) # 状態を読みこむ
+        nodes().val(0) # ノードの値を0にリセットする
         nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
         return self.network_info()
+        
+    def train(self,inputs_list,outputs_list):
+        #p.off()
+        self.forward(inputs_list)
+        #p.on()
+        self.backward(outputs_list)
+        return np.round(self.forward(inputs_list),2)
 
 
 def adfs(gn,node_body,edge_struct): # 自動定義関数
@@ -800,9 +819,9 @@ if __name__ == "__main__":
     p.on()
     np1.forward([[1]])
     """
-    node3=[('x0','in'),('x1','in'),('x2','in'),
-        ('h0',tanh),('h1',tanh),('h2',tanh),
-        ('y0',out_),('y1',out_),('y2',out_)]
+    node3=[('x0',affine,'in'),('x1',affine,'in'),('x2',affine,'in'),
+       ('h0',tanh,''),('h1',tanh,''),('h2',tanh,''),
+       ('y0',affine,'out'),('y1',affine,'out'),('y2',affine,'out')]
     edge3=[('x0','h0'),('x0','h1'),('x0','h2'),
         ('x1','h0'),('x1','h1'),('x1','h2'),
         ('x2','h0'),('x2','h1'),('x2','h2'),
