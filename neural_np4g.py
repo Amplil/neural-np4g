@@ -317,8 +317,13 @@ def adfs(gn,node_body,edge_struct): # 自動定義関数
 
 
 class NP4Gstruct(): # ネットワーク生成オブジェクト
-    def __init__(self,num_nodes,*funcs):
-        self.num_nodes=num_nodes
+    def __init__(self,nodes_num,in_num,out_num,*funcs):
+        if nodes_num<in_num or nodes_num<out_num:
+            print("全体のノードの数が入力ノードまたは出力ノードの数よりも小さいです。")
+            return False
+        self.nodes_num=nodes_num
+        self.in_num=in_num
+        self.out_num=out_num
         self.repeat_num=0 # 繰り返し回数
         self.clear1=0
         #self.node_body=[]
@@ -333,68 +338,68 @@ class NP4Gstruct(): # ネットワーク生成オブジェクト
                 self.adfs_list.append(node) # （入出力）オブジェクト(文字列)をadfsリストに登録
 
     def random_struct(self): # node_num: ノードを何個とるか inを含めない
-        #node_num=3 # ノードを何個とるか inを含めない
-        #node_list=[input]
-        node_list=[] # inを含めない
-        #node_list.extend([random.choice(adfs_list) for n in range(node_num)]) # ランダムに選んで加える
-        node_list.extend(random.choices(self.adfs_list,k=self.num_nodes)) # ランダムに選んで加える
-        node_struct=[('S','dummy')] # あとでinputは抜かす
-        node_struct.extend(list(enumerate(node_list))) # inも含めたランダムに作られたノード構造
+        #node_list=[] # 番号なしのノードリスト
+        node_struct=list(enumerate(random.choices(self.adfs_list,k=self.nodes_num))) # ノード構造
+        #node_list=random.choices(self.adfs_list,k=self.nodes_num) # ランダムに選んで加える
+        #node_name_list=list(range(self.nodes_num+self.in_num+self.out_num)) # node_nameだけのリスト
         node_name_list=[i for i,_ in node_struct] # node_nameだけのリスト
+        """
+        node_extend=lambda attr,k: node_struct.extend([(attr+str(i),node,attr) for i,node in enumerate(random.choices(self.adfs_list,k=k))]) # ノードをランダムに選んで加える
+        node_extend('',self.nodes_num) # ノーマルノードをランダムに選んで加える
+        node_extend('in',self.in_num) # 入力ノードをランダムに選んで加える
+        node_extend('out',self.out_num) # 出力ノードをランダムに選んで加える
+        node_name_list=[i for i,_,_ in node_struct] # node_nameだけのリスト
+        """
         #self.node_name_list=node_name_list
+        """
         if not (True in map(callable,[i for _,i in node_struct])): # node_structに呼び出し可能なノード(関数)が1つもない場合
             print("random_struct: All nodes are objects: skip")
             node_body=[]
             edge_struct=[]
             return node_body,edge_struct # すべてオブジェクトノードであった場合、inをedge_structに入れることができなくなってしまう。
+        """
 
         #connect_list=[]
         edge_struct=[]
-        n=0
-        while not 'S' in [i for i,_ in edge_struct]: # inを含むedge_structができるまでランダムに作り続ける
-            n+=1
-            if(n>1000):
-                print("random_struct: ",n,"回edgeの構築を繰り返しましたが、inを含むedge_structができませんでした。node_struct: ",node_struct)
-                node_body=[]
-                edge_struct=[]
-                return node_body,edge_struct
+        #n=0
+        #while not 'S' in [i for i,_ in edge_struct]: # inを含むedge_structができるまでランダムに作り続ける
+        #n+=1
+        """
+        if(n>1000):
+            print("random_struct: ",n,"回edgeの構築を繰り返しましたが、inを含むedge_structができませんでした。node_struct: ",node_struct)
+            node_body=[]
             edge_struct=[]
-            #for i,node in enumerate(node_list):
-            for node_name,node_content in node_struct:
-                if callable(node_content):
-                    node_sample=list(filter(lambda x: x!=node_name,node_name_list)) # 当ノードを除いたサンプルを用意する
-                    #node_sample.remove(node_name) # 当ノードを除いたサンプルを用意する
-
-                    #print(node_content)
-                    #print(node_sample)
-                    #print(node_name_list)
-                    ncn=node_content.__name__
-                    if ncn=="equal" or ncn=="control_gate" or ncn=="control_not_gate":
-                        #connect_list.extend([i,i]) # 2つ取る
-                        edge_struct.extend([(in_node,node_name) for in_node in random.sample(node_sample,2)]) # 入力ノードを重複なしでランダムに2つ選ぶ
-                    elif ncn=="sum":
-                        repeat=random.randrange(1,self.num_nodes) # sumの入力の本数は1～node_num（取れる最大のノード数）のうちでランダムに決める
-                        edge_struct.extend([(in_node,node_name) for in_node in random.sample(node_sample,repeat)]) # 入力ノードを重複なしでランダムにrepeat分選ぶ
-                        #connect_list.extend([i for _ in range(repeat)]) # repeat分取る
-                    else:
-                        edge_struct.append((random.choice(node_sample),node_name)) # 入力ノードをランダムに1つ選ぶ
-                        #connect_list.append(i) # 1つ取る
-                        #print('else')
-            """
-            if not 'S' in [i for i,_ in edge_struct] :
-                print(node_struct)
-                print(edge_struct)
-                print('no in')
-            """
+            return node_body,edge_struct
         """
+        #all_num=self.nodes_num+self.in_num+self.out_num
         edge_struct=[]
-        for connect_num in connect_list:
-            node_num_range=list(range(node_num+1)) # inも含める
-            node_num_range.pop(connect_num) # 当connectは含めない
-            edge_struct.append((random.choice(node_num_range),connect_num))
-        """
-        node_body=node_struct[1:] # inputを抜かす
-        return node_body,edge_struct # node_body,edge_structを渡す
+        #for i,node in enumerate(node_list):
+        for node_name,_ in node_struct:
+            #if callable(node_content):
+            #node_sample=list(filter(lambda x: x!=node_name,node_name_list)) # 当ノードを除いたサンプルを用意する
+            #node_sample.remove(node_name) # 当ノードを除いたサンプルを用意する
+            #ncn=node_content.__name__
+
+            repeat=random.randrange(0,self.nodes_num) # 出力の本数は0～all_num（取れる最大のノード数）のうちでランダムに決める
+            edge_struct.extend([(node_name,out_node) for out_node in random.sample(node_name_list,repeat)]) # 自身のノードも含め重複なしでランダムにrepeat分選ぶ
+            """
+            if attr=="in":
+                repeat=random.randrange(1,all_num) # 入力ノードの出力の本数は1～all_num（取れる最大のノード数）のうちでランダムに決める
+                edge_struct.extend([(node_name,out_node) for out_node in random.sample(node_name_list,repeat)]) # 入力ノードを重複なしでランダムにrepeat分選ぶ、自身のノードも含める
+            elif attr=="out":
+                repeat=random.randrange(1,self.num_nodes) # 出力ノードの入力の本数は1～all_num（取れる最大のノード数）のうちでランダムに決める
+                edge_struct.extend([(in_node,node_name) for in_node in random.sample(node_name_list,repeat)]) # 入力ノードを重複なしでランダムにrepeat分選ぶ
+                #connect_list.extend([i for _ in range(repeat)]) # repeat分取る
+            else:
+                edge_struct.append((random.choice(node_sample),node_name)) # 入力ノードをランダムに1つ選ぶ
+                #connect_list.append(i) # 1つ取る
+                #print('else')
+            """
+        #node_body=node_struct[1:] # inputを抜かす
+        in_names=random.sample(node_name_list,self.in_num) # 入力ノードを割り当てる
+        out_names=random.sample(node_name_list,self.out_num) # 出力ノードを割り当てる
+
+        return node_struct,edge_struct,in_names,out_names
 
     def Search2RequirementsWithAnalysis(self,input1,out_expect1,input2,out_expect2,timelimit=0,interval=0): # 2条件での解析を伴う探索
         self.input1=input1
@@ -806,6 +811,8 @@ def adfs_in12(gn,node_body_in12,edge_struct_in12): # 2入力の自動定義関�
     else: return -1
 
 if __name__ == "__main__":
+    ns=NP4Gstruct(3,3,3,affine,tanh)
+    ns.random_struct()
     """
     np1=NetworkProgram([('x0','in'),('h0',sig),('y0',out_)],[('x0','h0'),('h0','y0')])
     p.on()
