@@ -6,6 +6,7 @@ import time
 #import slacknotice # オリジナルモジュール slacknotice.send("")
 import traceback
 import random
+from tabulate import tabulate
 
 # 入力ノード数エラー：-1
 # 出力およびその他のエラー：-2
@@ -25,7 +26,7 @@ class p(): # ONのときだけ表示
 
 def sigmoid(gn): # シグモイド関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
+    x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
     result = 1 / (1 + np.exp(-x)) # シグモイド関数の演算
     #for out_node in gn.out_nodes:  # Output to all connected nodes
     #    gn.out_ele(out_node, result)
@@ -33,7 +34,7 @@ def sigmoid(gn): # シグモイド関数
 
 def tanh(gn): # tanh関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
+    x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
     result = np.tanh(x)
     return result
 """
@@ -44,7 +45,7 @@ def out_(gn): # 出力関数
 """
 def affine(gn): # 多変数の一次関数（ノーマル関数）
     # sumを関数内で行う必要があるのかどうか今後検討
-    result=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
+    result=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
     return result
 
 def derivative(gn): # 導関数
@@ -74,9 +75,12 @@ class GraphNode(): # グラフ（ネットワーク）の1つのノードにフ�
 
             self.func=self.ref['function'] # funcは定数扱いとするため変数関数にしない
             #self.attr=self.ref['attribute'] # attrは定数扱いとするため変数関数にしない
+
             # 変数関数
             self.val=lambda val=None: self.node_ref('value',val)
             self.d=lambda d=None: self.node_ref('delta',d)
+            self.b=lambda b=None: self.node_ref('bias',b)
+
             self.in_val=lambda val=None: self.edge_ref('value',True,val)
             self.out_val=lambda val=None: self.edge_ref('value',False,val)
             self.in_w=lambda w=None: self.edge_ref('weight',True,w)
@@ -186,27 +190,38 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
 class NetworkProgram(): # ネットワーク構造データからプログラムを実行
     #def __init__(self,input,node_struct,edge_struct):
     def __init__(self,node_struct,edge_struct,in_names,out_names):
+        #self.node_struct=node_struct # self.G.nodesで出てくる
+        #self.edge_struct=edge_struct # self.G.edgesで出てくる
         self.in_names=in_names
         self.out_names=out_names
         self.G=nx.DiGraph()
         self.states=[]
 
         #self.G.add_nodes_from([(tup[0],{'function':tup[1],'attribute':tup[2],'value': np.float64(0),'delta': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
-        self.G.add_nodes_from([(tup[0],{'function':tup[1],'value': np.float64(0),'delta': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
+        self.G.add_nodes_from([(tup[0],{'function':tup[1],'value': np.float64(0),'delta': np.float64(0),'bias': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
         self.G.add_edges_from(edge_struct)
         self.G.add_edges_from(list(map(lambda tup: tup+({'value': np.float64(0),'delta': np.float64(0)},) ,self.G.edges))) # エッジ要素を0.で初期化する
         self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.G.edges))) # 重みを乱数で初期化する
 
         #self.nodes=Nodes(self.G).select() # selectありきでnodesを組む。つまりnodesは関数
 
-    def view_network(self):
-        p.rint("nodes: ",self.G.nodes.data()) # 必要に応じて表示
-        p.rint("edges: ",self.G.edges.data())
+    def view_network(self): # pygraphvizを使用してネットワークを可視化
+        self.summary(out=p.out) # summaryの表示は現在の設定に合わせる
         return nx.nx_agraph.view_pygraphviz(self.G,prog='dot')  # pygraphvizが必要
 
-    def network_info(self):
-        print("nodes: ",self.G.nodes.data())
-        print("edges: ",self.G.edges.data())
+    def summary(self,out=True): # tabulateを使用してネットワーク情報を表示
+        current_out=p.out
+        p.out=out
+        p.rint("Input Nodes: ",self.in_names)
+        p.rint("Output Nodes: ",self.out_names)
+
+        tabulate_print=lambda headers,data: p.rint(tabulate(data, headers=headers, tablefmt="grid"),"\n")
+        data=[[node,d['function'].__name__,d['value'],d['delta'],d['bias']] for node,d in self.G.nodes.data()]
+        tabulate_print(["Node", "Function", "Value", "Error", "Bias"],data)
+        
+        data=[[str(src)+" -> "+str(dst),d['value'],d['delta'],d['weight']] for src,dst,d in self.G.edges.data()]
+        tabulate_print(["Edge", "Value", "Error", "Weight"],data)
+        p.out=current_out # 元の表示設定に戻す
 
     def run_tick(self,nodes):
         #self.states.append(Nodes(self.G).value()) # 状態の保存（すべてのノードの値）
@@ -260,64 +275,44 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                     gn.d(derivative(gn)*np.sum(gn.out_d()*gn.out_w())) # 誤差deltaを加える（出力誤差との足し合わせ）
 
                 dw=-self.eta*gn.d()*gn.in_val() # 重みの更新量
+                db=-self.eta*gn.d() # バイアスの更新量
                 #dw=self.eta*gn.ref['delta']*in_val # 重みの更新量
                 #gn.in_ws[j]+=dw # dwだけ更新する
                 #gn.in_refs[j]['weight']+=dw # dwだけ更新する
                 gn.in_w(gn.in_w()+dw) # dwだけ加えて更新する
-                p.rint("update node ",gn.name,", delta:",gn.d(),", weights:",gn.in_w())
+                gn.b(gn.b()+db) # dbだけ加えて更新する
+                p.rint("update node ",gn.name,", delta:",gn.d(),", weights:",gn.in_w(),", bias:",gn.b())
 
             nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
             #self.network_info()
 
         nodes().val(0) # ノードの値を0にリセットする
         nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
-        return self.network_info()
-        
+        return self.summary()
+
     def train(self,inputs_list,outputs_list):
         #p.off()
-        self.forward(inputs_list)
+        before_preds=self.forward(inputs_list)
         #p.on()
         self.backward(outputs_list)
-        return np.round(self.forward(inputs_list),2)
+        after_preds=self.forward(inputs_list)
+        return before_preds,after_preds
 
 
-def adfs(gn,node_body,edge_struct): # 自動定義関数
-    #if (gn.in_deg==1 and gn.out_deg==1): # 入力も出力もノードは1つ
-    p.rint("adfs node_body: ",node_body)
-    p.rint("adfs edge_struct: ",edge_struct)
-    if (gn.in_deg==1): # 入力は1つ
-        if (type(gn.in_ele_list[0])!=list): # 繰り返し処理に対応
-            in_list=[gn.in_ele_list[0]]
-        else:
-            in_list=gn.in_ele_list[0]
+def adfs(gn,model): # 自動定義関数
+    # 一旦概略だけ作る
+    p.rint("adfs: ")
+    model.summary(out=p.out)
 
-        out_list=[]
-        #p.rint("adfs input:",in_list)
-        for input in in_list: # 繰り返し処理に対応
-            p.rint("adfs input:",input)
-            #node_struct=[('S',input)]
-            #node_struct.extend(node_body)
-            #node_struct.append(('out',out_func))
-            #gsp=NetworkProgram(input,node_struct,edge_struct)
-            gsp=NetworkProgram(input,node_body,edge_struct)
-            out=gsp.run()
-            out_list.append(out)
-        if (len(out_list)==1):
-            result=out_list[0]
-        else:
-            result=out_list
-        #return gn.out_ele(gn.out_node_list[0],result) # resultを代入、出力ノードは1つだけ
+    p.rint("adfs input:",input)
+    out=model.forward(gn.in_val())
 
-        p.rint(result)
-        for out_node in gn.out_node_list: # 出力ノードは複数でも可
-            gn.out_ele(out_node,result)
-        p.rint("adfs out:",result)
-        return result
-    else: return -1
+    p.rint(out)
+    return out
 
 
-class NP4Gstruct(): # ネットワーク生成オブジェクト
-    def __init__(self,nodes_num,in_num,out_num,*funcs):
+class NeuralNP4G(): # Neural Network Programming for Generalization
+    def __init__(self,nodes_num,in_num,out_num,funcs): # まとまりが悪くなるためfuncsは可変長引数にしない
         if nodes_num<in_num or nodes_num<out_num:
             print("全体のノードの数が入力ノードまたは出力ノードの数よりも小さいです。")
             return False
@@ -332,12 +327,12 @@ class NP4Gstruct(): # ネットワーク生成オブジェクト
         self.adfs_list=[]
         self.add_adfs(*funcs) # ネットワーク生成に使う関数を登録する
 
-    def add_adfs(self,*add_tupple): # *add_tuppleは可変長引数
+    def add_adfs(self,*add_tupple): # *add_tuppleは可変長引数（関数だけが引数であるため）
         for node in add_tupple:
             if not (node in self.adfs_list): # すでにadfsに登録されているものは追加しない
                 self.adfs_list.append(node) # （入出力）オブジェクト(文字列)をadfsリストに登録
 
-    def random_struct(self): # node_num: ノードを何個とるか inを含めない
+    def create_random_model(self): # node_num: ノードを何個とるか inを含めない
         #node_list=[] # 番号なしのノードリスト
         node_struct=list(enumerate(random.choices(self.adfs_list,k=self.nodes_num))) # ノード構造
         #node_list=random.choices(self.adfs_list,k=self.nodes_num) # ランダムに選んで加える
@@ -396,10 +391,10 @@ class NP4Gstruct(): # ネットワーク生成オブジェクト
                 #print('else')
             """
         #node_body=node_struct[1:] # inputを抜かす
-        in_names=random.sample(node_name_list,self.in_num) # 入力ノードを割り当てる
-        out_names=random.sample(node_name_list,self.out_num) # 出力ノードを割り当てる
+        in_names=random.sample(set([edge[0] for edge in edge_struct]),self.in_num) # 入力ノードをエッジの始点となっているノードの中から割り当てる
+        out_names=random.sample(set([edge[1] for edge in edge_struct]),self.out_num) # 出力ノードをエッジの終点となっているノードの中から割り当てる
 
-        return node_struct,edge_struct,in_names,out_names
+        return NetworkProgram(node_struct,edge_struct,in_names,out_names) # オブジェクトを返す
 
     def Search2RequirementsWithAnalysis(self,input1,out_expect1,input2,out_expect2,timelimit=0,interval=0): # 2条件での解析を伴う探索
         self.input1=input1
@@ -460,21 +455,21 @@ class NP4Gstruct(): # ネットワーク生成オブジェクト
         self.add_adfs(input)
         while self.result!=out_expect:
             node_body,edge_struct=self.random_struct()
-            self.gsp=NetworkProgram(input,node_body,edge_struct)
-            self.result=self.gsp.run()
+            self.np=NetworkProgram(input,node_body,edge_struct)
+            self.result=self.np.run()
         self.add_adfs(lambda gn : adfs(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
-        self.gsp.network_show()
+        self.np.summary()
         return node_body,edge_struct
 
-    def MultiRequirements(self,teacher_data,timelimit=0,interval=0): # 複数条件での探索
+    def MultiRequirements(self,x,y,timelimit=0,interval=0): # 複数条件での探索（リザバーコンピューティングであるため複数条件が前提）
         self.start_time=time.time()
         self.half_time=time.time()
         self.timelimit=timelimit
         self.interval=interval
         self.result=""
 
-        for data in teacher_data:
-            self.add_adfs(*data)
+        #for data in teacher_data:
+        #    self.add_adfs(*data)
         n=0 # インターバル内の繰り返し回数
         while True:
             self.repeat_num+=1
@@ -495,24 +490,21 @@ class NP4Gstruct(): # ネットワーク生成オブジェクト
                     self.clear1=0
                     self.repeat_num=0
 
-            node_body,edge_struct=self.random_struct()
-            #print(node_body)
-            #print(edge_struct)
-            #pdb.set_trace()
-            for data in teacher_data:
-                input=data[0]
-                out_expect=data[1]
-                self.gsp=NetworkProgram(input,node_body,edge_struct)
-                self.result=self.gsp.run()
-                if self.result!=out_expect:
-                    break # 結果が合わなかったらforからbreak
-                else:
-                    self.clear1+=1
-            else: # forが最後までいったら関数自体を終了
-                self.add_adfs(lambda gn : adfs(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
+            model=self.create_random_model()
+            #model.summary()
+
+            # 一旦重みの最適化はあまりせずニューラルネットワークのモデルができるところまでやる
+            bp,ap=model.train(x,y)
+            total_lms=lambda pr,ol: np.sum([np.sum((pr[i]-ol[i])**2)/2 for i in range(len(ol))]) # すべての二乗和誤差の和
+            before_total_lms=total_lms(bp,y) # 二乗和誤差を計算する
+            after_total_lms=total_lms(ap,y) # 二乗和誤差を計算する
+
+            if before_total_lms>after_total_lms: # lossを少なくすることができたら
+                self.clear1+=1
+                self.add_adfs(lambda gn : adfs(gn,model)) # 条件を満たすネットワークをadfsリストに登録
                 print("実行時間：",time.time()-self.start_time,"秒")
-                self.gsp.network_show()
-                return node_body,edge_struct
+                model.summary()
+                return model
 
     def PhasedGenerate(self,input1,out_expect1,input2,out_expect2,timelimit=0,interval=0):
         #add_list=[input1,out_expect1,input2,out_expect2]
@@ -811,13 +803,16 @@ def adfs_in12(gn,node_body_in12,edge_struct_in12): # 2入力の自動定義関�
     else: return -1
 
 if __name__ == "__main__":
+    """
+    p.on()
+    nn=NeuralNP4G(9,3,3,[affine,tanh])
+    nn.MultiRequirements([[1,0,0],[0,1,0],[0,0,0]],[[0,0,0],[0,1,0],[1,0,0]])
+    """
+    """
     ns=NP4Gstruct(3,3,3,affine,tanh)
     ns.random_struct()
     """
-    np1=NetworkProgram([('x0','in'),('h0',sig),('y0',out_)],[('x0','h0'),('h0','y0')])
-    p.on()
-    np1.forward([[1]])
-    """
+
     node3=[('x0',affine),('x1',affine),('x2',affine),
         ('h0',tanh),('h1',tanh),('h2',tanh),
         ('y0',affine),('y1',affine),('y2',affine)]
