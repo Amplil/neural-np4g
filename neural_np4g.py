@@ -26,7 +26,8 @@ class p(): # ONのときだけ表示
 
 def sigmoid(gn): # シグモイド関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    #x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    x=affine(gn) # w1*in1+w2*in2+...+wt*int+b
     result = 1 / (1 + np.exp(-x)) # シグモイド関数の演算
     #for out_node in gn.out_nodes:  # Output to all connected nodes
     #    gn.out_ele(out_node, result)
@@ -34,7 +35,9 @@ def sigmoid(gn): # シグモイド関数
 
 def tanh(gn): # tanh関数
     # sumを関数内で行う必要があるのかどうか今後検討
-    x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    #x=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    #x=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int
+    x=affine(gn) # w1*in1+w2*in2+...+wt*int
     result = np.tanh(x)
     return result
 """
@@ -45,7 +48,10 @@ def out_(gn): # 出力関数
 """
 def affine(gn): # 多変数の一次関数（ノーマル関数）
     # sumを関数内で行う必要があるのかどうか今後検討
-    result=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    #result=np.sum(gn.in_val())+gn.b() # w1*in1+w2*in2+...+wt*int+b
+    #result=np.sum(gn.in_val()) # w1*in1+w2*in2+...+wt*int+b
+    #result=np.sum(gn.in_val()*gn.in_w()) # w1*in1+w2*in2+...+wt*int+b
+    result=np.sum(gn.in_val()*gn.in_w())+gn.b() # w1*in1+w2*in2+...+wt*int+b
     return result
 
 def derivative(gn): # 導関数
@@ -169,7 +175,8 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
         
     def edges_out(self): # すべてのノードの値を出力エッジに反映させる
         for gn in self.gns:
-            gn.out_val(gn.val()*gn.out_w()) # ノードの値を出力エッジに反映させる
+            #gn.out_val(gn.val()*gn.out_w()) # ノードの値を出力エッジに反映させる
+            gn.out_val(gn.val()) # ノードの値を出力エッジに反映させる、重みはかけずそのまま転記する
         
     def edges_in(self): # すべてのノードの誤差deltaを入力エッジに反映させる
         for gn in self.gns:
@@ -217,10 +224,10 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
 
         tabulate_print=lambda headers,data: p.rint(tabulate(data, headers=headers, tablefmt="grid"),"\n")
         data=[[node,d['function'].__name__,d['value'],d['delta'],d['bias']] for node,d in self.G.nodes.data()]
-        tabulate_print(["Node", "Function", "Value", "Error", "Bias"],data)
+        tabulate_print(["Node", "Function", "Value", "Delta", "Bias"],data)
         
         data=[[str(src)+" -> "+str(dst),d['value'],d['delta'],d['weight']] for src,dst,d in self.G.edges.data()]
-        tabulate_print(["Edge", "Value", "Error", "Weight"],data)
+        tabulate_print(["Edge", "Value", "Delta", "Weight"],data)
         p.out=current_out # 元の表示設定に戻す
 
     def run_tick(self,nodes):
@@ -280,7 +287,8 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                 #gn.in_ws[j]+=dw # dwだけ更新する
                 #gn.in_refs[j]['weight']+=dw # dwだけ更新する
                 gn.in_w(gn.in_w()+dw) # dwだけ加えて更新する
-                gn.b(gn.b()+db) # dbだけ加えて更新する
+                if not (gn.name in self.in_names): # 入力ノード以外
+                    gn.b(gn.b()+db) # dbだけ加えて更新する
                 p.rint("update node ",gn.name,", delta:",gn.d(),", weights:",gn.in_w(),", bias:",gn.b())
 
             nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
