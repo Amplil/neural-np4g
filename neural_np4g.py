@@ -211,6 +211,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.G.edges))) # 重みを乱数で初期化する
 
         #self.nodes=Nodes(self.G).select() # selectありきでnodesを組む。つまりnodesは関数
+        self.tabulate_print=lambda headers,data: p.rint(tabulate(data, headers=headers, tablefmt="grid"),"\n")
 
     def view_network(self): # pygraphvizを使用してネットワークを可視化
         self.summary(out=p.out) # summaryの表示は現在の設定に合わせる
@@ -221,14 +222,25 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         p.out=out
         p.rint("Input Nodes: ",self.in_names)
         p.rint("Output Nodes: ",self.out_names)
-
+        """
         tabulate_print=lambda headers,data: p.rint(tabulate(data, headers=headers, tablefmt="grid"),"\n")
         data=[[node,d['function'].__name__,d['value'],d['delta'],d['bias']] for node,d in self.G.nodes.data()]
         tabulate_print(["Node", "Function", "Value", "Delta", "Bias"],data)
         
         data=[[str(src)+" -> "+str(dst),d['value'],d['delta'],d['weight']] for src,dst,d in self.G.edges.data()]
         tabulate_print(["Edge", "Value", "Delta", "Weight"],data)
+        """
+        self.node_info()
+        self.edge_info()
         p.out=current_out # 元の表示設定に戻す
+
+    def node_info(self):
+        data=[[node,d['function'].__name__,d['value'],d['delta'],d['bias']] for node,d in self.G.nodes.data()]
+        self.tabulate_print(["Node", "Function", "Value", "Delta", "Bias"],data)
+
+    def edge_info(self):
+        data=[[str(src)+" -> "+str(dst),d['value'],d['delta'],d['weight']] for src,dst,d in self.G.edges.data()]
+        self.tabulate_print(["Edge", "Value", "Delta", "Weight"],data)
 
     def run_tick(self,nodes):
         #self.states.append(Nodes(self.G).value()) # 状態の保存（すべてのノードの値）
@@ -237,9 +249,11 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         for gn in nodes().gns: # すべてのノード（入力ノードであっても入力エッジがあれば実行できるようにする）
             if not (gn.name in self.in_names): # 入力ノード以外
                 gn.val(gn.func(gn)) # ノードを実行してノードの値を変える
-            p.rint("result node:",gn.name,", value:",gn.val())
+            #p.rint("result node:",gn.name,", value:",gn.val())
         output=nodes(self.out_names).val() # 出力ノードの値
         self.states.append(nodes().val()) # 状態の保存（すべてのノードの値）
+        #self.summary()
+        self.node_info()
         p.rint("output: ",output)
         return output
 
