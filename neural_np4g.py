@@ -173,6 +173,23 @@ class Nodes(): # 複数のノードそれぞれにフォーカス
         else: # valが指定されてないとき
             return np.array([gn.d() for gn in self.gns]) # ノードの値を出力する
         
+    def b(self,b=None): # 複数ノードの値の出力と更新
+        if b is not None:
+            if type(b)==list or type(b)==np.ndarray:
+                if len(b)==len(self.gns): # 代入する値の個数がノードの個数と合っているかどうか
+                    for i,gn in enumerate(self.gns):
+                        gn.b(np.float64(b[i])) # bを参照して値を変える
+                    return np.array(b)
+                else:
+                    print("代入する値の個数がノードの個数と合いません。")
+                    return False
+            else: # リストでなければ数値が考えられる。それ以外はエラー
+                for gn in self.gns:
+                    gn.b(np.float64(b)) # bを参照して値を変える
+                return np.float64(b)
+        else: # bが指定されてないとき
+            return np.array([gn.b() for gn in self.gns]) # ノードの値を出力する
+        
     def edges_out(self): # すべてのノードの値を出力エッジに反映させる
         for gn in self.gns:
             #gn.out_val(gn.val()*gn.out_w()) # ノードの値を出力エッジに反映させる
@@ -199,6 +216,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
     def __init__(self,node_struct,edge_struct,in_names,out_names):
         #self.node_struct=node_struct # self.G.nodesで出てくる
         #self.edge_struct=edge_struct # self.G.edgesで出てくる
+        self.eta=0.01 # 暫定値
         self.in_names=in_names
         self.out_names=out_names
         self.G=nx.DiGraph()
@@ -208,7 +226,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         self.G.add_nodes_from([(tup[0],{'function':tup[1],'value': np.float64(0),'delta': np.float64(0),'bias': np.float64(0)}) for tup in node_struct]) # node_structをnetworkxに対応した形にして渡す
         self.G.add_edges_from(edge_struct)
         self.G.add_edges_from(list(map(lambda tup: tup+({'value': np.float64(0),'delta': np.float64(0)},) ,self.G.edges))) # エッジ要素を0.で初期化する
-        self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand(),) ,self.G.edges))) # 重みを乱数で初期化する
+        self.G.add_weighted_edges_from(list(map(lambda tup: tup+(np.random.rand()*0.01,) ,self.G.edges))) # 重みを乱数で初期化する、初期値は小さい値にする
 
         #self.nodes=Nodes(self.G).select() # selectありきでnodesを組む。つまりnodesは関数
         self.tabulate_print=lambda headers,data: p.rint(tabulate(data, headers=headers, tablefmt="grid"),"\n")
@@ -267,6 +285,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
         for inputs in inputs_list: # inputs_listの長さ分実行
             p.rint("inputs: ",inputs)
             nodes(self.in_names).val(inputs) # 入力ノードにinputsの値をそれぞれ入れていく
+            #nodes(self.in_names).b(inputs) # 入力ノードのバイアスにinputsの値をそれぞれ入れていく
             outputs.append(self.run_tick(nodes))
         #nodes(self.in_names).val(0) # 入力し終わったら、すべての入力ノードの値を0にリセットする
 
@@ -275,7 +294,6 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
     def backward(self,outputs_list):
         out_reverse=np.array(outputs_list)[::-1] # 逆順にする
         state_reverse=self.states[::-1] # 逆順にする
-        self.eta=1 # 暫定値
         nodes=Nodes(self.G).select # selectありきでnodesを組む。つまりnodesは関数
         nodes().d(0) # 誤差deltaのリセット
         nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
@@ -301,8 +319,10 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
                 #gn.in_ws[j]+=dw # dwだけ更新する
                 #gn.in_refs[j]['weight']+=dw # dwだけ更新する
                 gn.in_w(gn.in_w()+dw) # dwだけ加えて更新する
+                
                 if not (gn.name in self.in_names): # 入力ノード以外
                     gn.b(gn.b()+db) # dbだけ加えて更新する
+                
                 p.rint("update node ",gn.name,", delta:",gn.d(),", weights:",gn.in_w(),", bias:",gn.b())
 
             nodes().edges_in() # すべてのノードの誤差deltaを入力エッジに反映させる
@@ -310,7 +330,7 @@ class NetworkProgram(): # ネットワーク構造データからプログラム
 
         nodes().val(0) # ノードの値を0にリセットする
         nodes().edges_out() # 先にすべてのノードの値を出力エッジに反映させる
-        return self.summary()
+        return self.summary(out=p.out)
 
     def train(self,inputs_list,outputs_list):
         #p.off()
@@ -847,7 +867,7 @@ if __name__ == "__main__":
     in_node3=["x0","x1","x2"]
     out_node3=["y0","y1","y2"]
     np3=NetworkProgram(node3,edge3,in_node3,out_node3)
-
+    """
     # 重みを指定
     np3.G.add_weighted_edges_from(
         [('x0','h0',0),('x0','h1',1),('x0','h2',0),
@@ -856,7 +876,8 @@ if __name__ == "__main__":
         ('h0','y0',1),('h0','y1',0),('h0','y2',0),
         ('h1','y0',0),('h1','y1',1),('h1','y2',0),
         ('h2','y0',0),('h2','y1',0),('h2','y2',1)])
-
+    """
+    np3.eta=0.001 # 暫定値
     p.on()
     inputs_list=[[1,0,0],[0,1,0],[0,0,0]]
     outputs_list=[[0,0,0],[0,1,0],[1,0,0]]
