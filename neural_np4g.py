@@ -503,7 +503,7 @@ class NeuralNP4G(): # Neural Network Programming for Generalization
         self.np.summary()
         return node_body,edge_struct
 
-    def MultiRequirements(self,x,y,timelimit=0,interval=0): # 複数条件での探索（リザバーコンピューティングであるため複数条件が前提）
+    def MultiRequirements(self,x,y,timelimit=0,interval=0,max_training_epochs=100,training_threshold=1e-6,validating_threshold=1e-3): # 複数条件での探索（リザバーコンピューティングであるため複数条件が前提）
         self.start_time=time.time()
         self.half_time=time.time()
         self.timelimit=timelimit
@@ -534,14 +534,16 @@ class NeuralNP4G(): # Neural Network Programming for Generalization
 
             model=self.create_random_model()
             #model.summary()
+            for epoch in range(max_training_epochs):
+                bp,ap=model.train(x,y) # train()は内部で forward → backward → forward を実行し、学習前後の出力を返す
+                total_lms=lambda pr,ol: np.sum([np.sum((pr[i]-ol[i])**2)/2 for i in range(len(ol))]) # すべての二乗和誤差の和
+                before_total_lms=total_lms(bp,y) # 二乗和誤差を計算する
+                after_total_lms=total_lms(ap,y) # 二乗和誤差を計算する
+                print(f"モデル {self.repeat_num} / エポック {epoch}: loss_before = {before_total_lms:.6f}, loss_after = {after_total_lms:.6f}")
+                if (before_total_lms - after_total_lms) < training_threshold: # 改善幅がしきい値未満なら学習ループを抜ける
+                    break
 
-            # 一旦重みの最適化はあまりせずニューラルネットワークのモデルができるところまでやる
-            bp,ap=model.train(x,y)
-            total_lms=lambda pr,ol: np.sum([np.sum((pr[i]-ol[i])**2)/2 for i in range(len(ol))]) # すべての二乗和誤差の和
-            before_total_lms=total_lms(bp,y) # 二乗和誤差を計算する
-            after_total_lms=total_lms(ap,y) # 二乗和誤差を計算する
-
-            if before_total_lms>after_total_lms: # lossを少なくすることができたら
+            if after_total_lms < validating_threshold: # lossを少なくすることができたら
                 self.clear1+=1
                 self.add_adfs(lambda gn : adfs(gn,model)) # 条件を満たすネットワークをadfsリストに登録
                 print("実行時間：",time.time()-self.start_time,"秒")
