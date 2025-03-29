@@ -352,7 +352,6 @@ def adfs(gn,model): # 自動定義関数
     p.rint(out)
     return out
 
-
 class ExperienceBuffer:
     def __init__(self, capacity=10000):
         self.buffer = []
@@ -371,18 +370,18 @@ class ExperienceBuffer:
     def __len__(self):
         return len(self.buffer)
 
-class NeuralNP4G():
-    def __init__(self, nodes_num, in_num, out_num, funcs):
-        if nodes_num < in_num or nodes_num < out_num:
+class NeuralNP4G(): # Neural Network Programming for Generalization
+    def __init__(self,nodes_num,in_num,out_num,func): # まとまりが悪くなるためfuncsは可変長引数にしない
+        if nodes_num<in_num or nodes_num<out_num:
             print("全体のノードの数が入力ノードまたは出力ノードの数よりも小さいです。")
             return False
-        self.nodes_num = nodes_num
-        self.in_num = in_num
-        self.out_num = out_num
-        self.repeat_num = 0
-        self.clear1 = 0
-        self.adfs_list = []
-        self.add_adfs(*funcs)
+        self.nodes_num=nodes_num
+        self.in_num=in_num
+        self.out_num=out_num
+        self.repeat_num=0 # 繰り返し回数
+        self.clear1=0
+        #self.adfs_list=[]
+        #self.add_adfs(*funcs) # ネットワーク生成に使う関数を登録する
         
         # DRL parameters
         self.experience_buffer = ExperienceBuffer()
@@ -393,6 +392,16 @@ class NeuralNP4G():
         self.epsilon_decay = 0.995
         self.learning_rate = 0.001
 
+        if not callable(func):
+            print("Error: func must be a function.")
+            return False
+        self.func=func
+    """
+    def add_adfs(self,*add_tupple): # *add_tuppleは可変長引数（関数だけが引数であるため）
+        for node in add_tupple:
+            if not (node in self.adfs_list): # すでにadfsに登録されているものは追加しない
+                self.adfs_list.append(node) # （入出力）オブジェクト(文字列)をadfsリストに登録
+    """
     def get_state(self, model):
         # Convert model structure to state representation
         state = []
@@ -401,7 +410,7 @@ class NeuralNP4G():
         for edge in model.G.edges():
             state.extend([model.G.edges[edge]['weight'], model.G.edges[edge]['value'], model.G.edges[edge]['delta']])
         return np.array(state)
-
+    
     def get_action(self, state):
         # Epsilon-greedy action selection
         if random.random() < self.epsilon:
@@ -411,7 +420,7 @@ class NeuralNP4G():
             # Exploitation: best action based on current state
             # This is a simplified version - you might want to implement a more sophisticated action selection
             return random.choice(self.adfs_list)
-
+        
     def reward_function(self, outputs, desired_outputs):
         # Calculate reward based on output accuracy
         if np.array_equal(outputs, desired_outputs):
@@ -421,129 +430,33 @@ class NeuralNP4G():
             distance = np.sum((outputs - desired_outputs) ** 2)
             return -distance
 
-    def create_random_model(self):
-        # Create initial model structure
-        node_struct = [(i, self.func) for i in range(self.nodes_num)]
-        node_name_list = [i for i, _ in node_struct]
-        edge_struct = []
-        
-        # Use DRL to guide edge creation
-        for node_name, _ in node_struct:
+    def create_random_model(self): # node_num: ノードを何個とるか inを含めない
+        node_struct=[(i, self.func) for i in range(self.nodes_num)] # ノード構造
+        node_name_list=[i for i,_ in node_struct] # node_nameだけのリスト
+        edge_struct=[]
+        for node_name,_ in node_struct:
             state = self.get_state(NetworkProgram(node_struct, [], [], []))
-            action = self.get_action(state)
-            
-            # Apply action to create edges
-            repeat = random.randrange(0, self.nodes_num)
-            new_edges = [(node_name, out_node) for out_node in random.sample(node_name_list, repeat)]
-            edge_struct.extend(new_edges)
+            action = self.get_action(state)            
 
-        in_names = random.sample(set([edge[0] for edge in edge_struct]), self.in_num)
-        out_names = random.sample(set([edge[1] for edge in edge_struct]), self.out_num)
+            repeat=random.randrange(0,self.nodes_num) # 出力の本数は0～all_num（取れる最大のノード数）のうちでランダムに決める
+            edge_struct.extend([(node_name,out_node) for out_node in random.sample(node_name_list,repeat)]) # 自身のノードも含め重複なしでランダムにrepeat分選ぶ
 
-        return NetworkProgram(node_struct, edge_struct, in_names, out_names)
+        in_names=random.sample(set([edge[0] for edge in edge_struct]),self.in_num) # 入力ノードをエッジの始点となっているノードの中から割り当てる
+        out_names=random.sample(set([edge[1] for edge in edge_struct]),self.out_num) # 出力ノードをエッジの終点となっているノードの中から割り当てる
 
-    def MultiRequirements(self, x, y, timelimit=0, interval=0, max_training_epochs=100, training_threshold=1e-6, validating_threshold=1e-3):
-        self.start_time = time.time()
-        self.half_time = time.time()
-        self.timelimit = timelimit
-        self.interval = interval
-        self.result = ""
+        return NetworkProgram(node_struct,edge_struct,in_names,out_names) # オブジェクトを返す
 
-        n = 0
-        while True:
-            self.repeat_num += 1
-            n += 1
-            
-            if n > 1000:
-                n = 0
-                self.now_time = time.time()
-                elapsed_time = self.now_time - self.start_time
-                if self.timelimit > 0 and elapsed_time >= self.timelimit:
-                    print(elapsed_time, "秒経過しましたが、条件を満たすネットワークを見つけることができませんでした。")
-                    return [], []
-
-                if self.interval > 0 and self.now_time - self.half_time >= self.interval:
-                    print(elapsed_time, "秒経過 ", "生成されたグラフの数: ", self.repeat_num, ",第一条件をクリアしたグラフの数: ", self.clear1)
-                    self.half_time = self.now_time
-                    self.clear1 = 0
-                    self.repeat_num = 0
-
-            # Create and train model
-            model = self.create_random_model()
-            best_reward = float('-inf')
-            
-            for epoch in range(max_training_epochs):
-                # Get current state
-                current_state = self.get_state(model)
-                
-                # Train model
-                bp, ap = model.train(x, y)
-                
-                # Calculate reward
-                reward = self.reward_function(ap, y)
-                
-                # Get next state
-                next_state = self.get_state(model)
-                
-                # Store experience
-                self.experience_buffer.push(current_state, model, reward, next_state)
-                
-                # Update epsilon
-                self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-                
-                # Calculate loss
-                total_lms = lambda pr, ol: np.sum([np.sum((pr[i] - ol[i]) ** 2) / 2 for i in range(len(ol))])
-                before_total_lms = total_lms(bp, y)
-                after_total_lms = total_lms(ap, y)
-                
-                print(f"モデル {self.repeat_num} / エポック {epoch}: loss_before = {before_total_lms:.6f}, loss_after = {after_total_lms:.6f}, reward = {reward:.2f}, epsilon = {self.epsilon:.2f}")
-                
-                # Update best reward
-                best_reward = max(best_reward, reward)
-                
-                if (before_total_lms - after_total_lms) < training_threshold:
-                    break
-
-            # Experience replay
-            if len(self.experience_buffer) >= self.batch_size:
-                batch = self.experience_buffer.sample(self.batch_size)
-                for state, action, reward, next_state in batch:
-                    # Update model based on experience
-                    # This is a simplified version - you might want to implement a more sophisticated update mechanism
-                    pass
-
-            if after_total_lms < validating_threshold and best_reward > 0:
-                self.clear1 += 1
-                print("実行時間：", time.time() - self.start_time, "秒")
-                model.summary()
-                return model
-
-    def add_adfs(self,*add_tupple): # *add_tuppleは可変長引数（関数だけが引数であるため）
-        for node in add_tupple:
-            if not (node in self.adfs_list): # すでにadfsに登録されているものは追加しない
-                self.adfs_list.append(node) # （入出力）オブジェクト(文字列)をadfsリストに登録
-
-    def Search2RequirementsWithAnalysis(self,input1,out_expect1,input2,out_expect2,timelimit=0,interval=0): # 2条件での解析を伴う探索
-        self.input1=input1
-        self.out_expect1=out_expect1
-        self.input2=input2
-        self.out_expect2=out_expect2
+    def MultiRequirements(self,x,y,timelimit=0,interval=0,max_training_epochs=100,training_threshold=1e-6,validating_threshold=1e-3): # 複数条件での探索（リザバーコンピューティングであるため複数条件が前提）
         self.start_time=time.time()
         self.half_time=time.time()
         self.timelimit=timelimit
         self.interval=interval
-        self.result1=""
-        self.result2=""
-        #self.adfs_list.extend([self.input1,self.out_expect1,self.input2,self.out_expect2]) # （入出力）オブジェクト(文字列)をadfsリストに登録
-        #add_list=[self.input1,self.out_expect1,self.input2,self.out_expect2]
-        """
-        for node in add_list:
-            if not (node in self.adfs_list): # すでにadfsに登録されているものは追加しない
-                self.adfs_list.append(node) # （入出力）オブジェクト(文字列)をadfsリストに登録
-        """
-        self.add_adfs(self.input1,self.out_expect1,self.input2,self.out_expect2)
+        self.result=""
+
+        #for data in teacher_data:
+        #    self.add_adfs(*data)
         n=0 # インターバル内の繰り返し回数
-        while self.result1!=self.out_expect1 or self.result2!=self.out_expect2:
+        while True:
             self.repeat_num+=1
             n+=1
             if n>1000:
@@ -553,44 +466,35 @@ class NeuralNP4G():
                 if self.timelimit>0 and elapsed_time>=self.timelimit:
                     print(elapsed_time,"秒経過しましたが、条件を満たすネットワークを見つけることができませんでした。")
                     #slacknotice.send(elapsed_time,"秒経過しましたが、条件を満たすネットワークを見つけることができませんでした。")
-                    return -1
+                    return [],[]
 
                 if self.interval>0 and self.now_time-self.half_time>=self.interval:
                     print(elapsed_time,"秒経過 ","生成されたグラフの数: ",self.repeat_num,",第一条件をクリアしたグラフの数: ",self.clear1)
-                    #slacknotice.send(elapsed_time,"秒経過 ","生成されたグラフの数: ",self.repeat_num,",第一条件をクリアしたグラフの数: ",self.clear1)
+                    #slacknotice.send(elapsed_time,"秒経過 ","生成されたグラフの数: ",self.repeat_num,",1つでも条件をクリアしたグラフの数: ",self.clear1)
                     self.half_time=self.now_time
                     self.clear1=0
                     self.repeat_num=0
-            node_body,edge_struct=self.random_struct()
-            #print(node_body)
-            #print(edge_struct)
-            self.gsp1=NetworkProgram(self.input1,node_body,edge_struct)
-            self.result1=self.gsp1.run()
-            if self.result1!=self.out_expect1:
-                continue
-            #print("result1 is ok")
-            self.clear1+=1
-            self.gsp2=NetworkProgram(self.input2,node_body,edge_struct)
-            self.result2=self.gsp2.run()
-        self.add_adfs(lambda gn : adfs(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
-        self.gsp1.network_show()
-        #self.gsp2.network_show()
-        return node_body,edge_struct
 
-    def Search1Requirement(self,input,out_expect): # 1条件での探索
-        self.result=""
-        self.add_adfs(input)
-        while self.result!=out_expect:
-            node_body,edge_struct=self.random_struct()
-            self.np=NetworkProgram(input,node_body,edge_struct)
-            self.result=self.np.run()
-        self.add_adfs(lambda gn : adfs(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
-        self.np.summary()
-        return node_body,edge_struct
+            model=self.create_random_model()
+            #model.summary()
+            for epoch in range(max_training_epochs):
+                bp,ap=model.train(x,y) # train()は内部で forward → backward → forward を実行し、学習前後の出力を返す
+                total_lms=lambda pr,ol: np.sum([np.sum((pr[i]-ol[i])**2)/2 for i in range(len(ol))]) # すべての二乗和誤差の和
+                before_total_lms=total_lms(bp,y) # 二乗和誤差を計算する
+                after_total_lms=total_lms(ap,y) # 二乗和誤差を計算する
+                print(f"モデル {self.repeat_num} / エポック {epoch}: loss_before = {before_total_lms:.6f}, loss_after = {after_total_lms:.6f}")
+                if (before_total_lms - after_total_lms) < training_threshold: # 改善幅がしきい値未満なら学習ループを抜ける
+                    break
+
+            if after_total_lms < validating_threshold: # lossを少なくすることができたら
+                self.clear1+=1
+                #self.add_adfs(lambda gn : adfs(gn,model)) # 条件を満たすネットワークをadfsリストに登録
+                print("実行時間：",time.time()-self.start_time,"秒")
+                model.summary()
+                return model
 
     def PhasedGenerate(self,input1,out_expect1,input2,out_expect2,timelimit=0,interval=0):
-        #add_list=[input1,out_expect1,input2,out_expect2]
-        self.add_adfs(input1,out_expect1,input2,out_expect2)
+        #self.add_adfs(input1,out_expect1,input2,out_expect2)
         self.Search1Requirement(input1,out_expect1)
         self.Search1Requirement(input2,out_expect2)
         return self.Search2RequirementsWithAnalysis(input1,out_expect1,input2,out_expect2,timelimit=timelimit,interval=interval)
@@ -642,23 +546,6 @@ class NeuralNP4G():
         node_body=node_struct[2:] # inputを抜かす
         return node_body,edge_struct # node_body,edge_structを渡す
 
-    def Search1RequirementMulti(self,in1,in2,out_expect): # 1条件での探索
-        #self.result=""
-        self.result=[""]
-        self.add_adfs(in1,in2,out_expect)
-        while self.result!=out_expect:
-            node_in12,edge_in12=self.random_struct()
-            mi=MultiInout(node_in12,edge_in12)
-            #self.result=mi.run(in1,in2)
-            self.output=mi.run(in1,in2)
-            if type(self.output)!=list or self.output==[]:
-                self.result=[""]
-            else:
-                self.result=self.output[-1] # 最後の出力が第一出力
-        self.add_adfs(lambda gn : adfs_in12(gn,node_in12,edge_in12)) # 条件を満たすネットワークをadfsリストに登録
-        #self.gsp.network_show()
-        return node_in12,edge_in12
-
     def MultiRequirementsMulti(self,teacher_data,timelimit=0,interval=0): # 複数条件での探索
         # teacher_data: ((in1,in2,out_expect),(in12,in22,out_expect2), ...)
         self.start_time=time.time()
@@ -666,9 +553,10 @@ class NeuralNP4G():
         self.timelimit=timelimit
         self.interval=interval
         self.result=""
-
+        """
         for data in teacher_data:
             self.add_adfs(*data)
+        """
         n=0 # インターバル内の繰り返し回数
         while True:
             self.repeat_num+=1
@@ -709,7 +597,7 @@ class NeuralNP4G():
                 else:
                     self.clear1+=1
             else: # forが最後までいったら関数自体を終了
-                self.add_adfs(lambda gn : adfs_in12(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
+                #self.add_adfs(lambda gn : adfs_in12(gn,node_body,edge_struct)) # 条件を満たすネットワークをadfsリストに登録
                 print("実行時間：",time.time()-self.start_time,"秒")
                 #self.gsp.network_show()
                 return node_body,edge_struct    
